@@ -1,0 +1,6 @@
+{
+  "name": "AI Hub",
+  "description": "ChatGPT-styled AI Hub with Google Gemini 3.5 & Pro, Veo 3 Video, Image Studio, Maps Grounding and Transcribe",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
