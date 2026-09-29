@@ -102,9 +102,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          chmod +x ./gradlew
-
-          ./gradlew :app:assembleDebug \
+          gradle :app:assembleDebug \
             --stacktrace \
             --no-daemon \
             --no-configuration-cache
