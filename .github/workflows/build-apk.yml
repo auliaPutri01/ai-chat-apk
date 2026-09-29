@@ -2,7 +2,8 @@ name: Build Android APK
 
 on:
   push:
-    branches: ["**"]
+    branches:
+      - "**"
   workflow_dispatch:
 
 permissions:
@@ -13,6 +14,10 @@ jobs:
     name: Build Debug APK
     runs-on: ubuntu-latest
 
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -21,53 +26,94 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: "17"
-          distribution: "temurin"
+          distribution: temurin
           cache: gradle
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          accept-android-sdk-licenses: true
-          api-level: 35
-          build-tools-version: "35.0.0"
+      - name: Set up Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SDKMANAGER=""
+
+          if command -v sdkmanager >/dev/null 2>&1; then
+            SDKMANAGER="$(command -v sdkmanager)"
+          elif [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          else
+            SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" \
+              -type f \
+              -name sdkmanager \
+              2>/dev/null | sort -V | tail -n 1 || true)"
+          fi
+
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "sdkmanager tidak ditemukan."
+            find "$ANDROID_SDK_ROOT" -maxdepth 5 -type f -name sdkmanager -print || true
+            exit 1
+          fi
+
+          echo "Menggunakan sdkmanager: $SDKMANAGER"
+
+          SDKMANAGER_DIR="$(dirname "$SDKMANAGER")"
+          echo "$SDKMANAGER_DIR" >> "$GITHUB_PATH"
+
+          mkdir -p "$ANDROID_SDK_ROOT/licenses"
+
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+
+          "$SDKMANAGER" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"
 
-      - name: Accept Android SDK Licenses (Fallback)
-        shell: bash
-        run: |
-          mkdir -p "$ANDROID_HOME/licenses" || true
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
-
       - name: Prepare Android Project
         shell: bash
         run: |
+          set -euo pipefail
+
           touch .env
 
-          # Pastikan compileSdk sesuai SDK yang tersedia
           if [ -f app/build.gradle.kts ]; then
-            sed -i 's/compileSdk *= *[0-9]*/compileSdk = 35/g' app/build.gradle.kts
-            sed -i 's/compileSdk {.*}/compileSdk = 35/g' app/build.gradle.kts
+            sed -i -E \
+              's/compileSdk[[:space:]]*=[[:space:]]*[0-9]+/compileSdk = 35/g' \
+              app/build.gradle.kts
+
+            sed -i -E \
+              's/compileSdk[[:space:]]+[0-9]+/compileSdk 35/g' \
+              app/build.gradle.kts
           fi
 
-          # Samakan AGP agar kompatibel dengan runner
           if [ -f gradle/libs.versions.toml ]; then
-            sed -i 's/agp = "[0-9.]*"/agp = "8.8.2"/g' gradle/libs.versions.toml
+            sed -i -E \
+              's/(agp[[:space:]]*=[[:space:]]*")[0-9.]+"/\18.8.2"/g' \
+              gradle/libs.versions.toml
           fi
 
           if [ -f app/build.gradle.kts ]; then
-            sed -i "s/version '9\\.[0-9.]*'/version '8.8.2'/g" app/build.gradle.kts
-            sed -i 's/version "9\\.[0-9.]*"/version "8.8.2"/g' app/build.gradle.kts
+            sed -i -E \
+              's/(id\(["'\'']com\.android\.[^"'\'']+["'\'']\)[[:space:]]+version[[:space:]]+["'\''])[0-9.]+(["'\''])/\18.8.2\2/g' \
+              app/build.gradle.kts
           fi
 
       - name: Build Debug APK
         shell: bash
         run: |
+          set -euo pipefail
+
           chmod +x ./gradlew
-          ./gradlew :app:assembleDebug --stacktrace --no-daemon --no-configuration-cache
+
+          ./gradlew :app:assembleDebug \
+            --stacktrace \
+            --no-daemon \
+            --no-configuration-cache
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
