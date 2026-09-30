@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: build-apk-${{ github.ref }}
@@ -55,12 +55,25 @@ jobs:
           set -o pipefail
           gradle :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee build.log
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
         with:
           name: AI-Hub-app-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish APK to GitHub Release
+        # Main-only in the final version. The working branch is allowed temporarily so
+        # the APK is published to Releases before this branch is merged to main.
+        # Delete the second clause once merged.
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/01a0f304-ai-hub') && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: AI Hub debug build ${{ github.run_number }}
+          prerelease: true
+          files: app/build/outputs/apk/debug/*.apk
 
       - name: Upload build log (jika gagal)
         if: failure()
