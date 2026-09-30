@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: build-apk-${{ github.ref }}
@@ -70,40 +70,3 @@ jobs:
           path: build.log
           if-no-files-found: ignore
           retention-days: 7
-
-      # Debug aid: publish a condensed failure log to the ci-logs branch so it can be
-      # read through api.github.com (Actions log/artifact downloads are network-blocked
-      # from the agent sandbox). Remove this step once the build is green.
-      - name: Publish condensed failure log (debug)
-        if: failure()
-        shell: bash
-        run: |
-          set -euo pipefail
-          {
-            echo "=== RUN: ${{ github.run_number }} / ${{ github.sha }} ==="
-            echo ""
-            echo "=== WHAT WENT WRONG ==="
-            grep -n "What went wrong" -A 45 build.log | head -70
-            echo ""
-            echo "=== e: ERRORS (unique) ==="
-            grep -E "^e: " build.log | sort -u | head -60
-            echo ""
-            echo "=== FAILED TASKS ==="
-            grep -E "Task .* FAILED|Execution failed for task" build.log | sort -u | head -30
-            echo ""
-            echo "=== Caused by ==="
-            grep -n "Caused by" -A 6 build.log | head -80
-            echo ""
-            echo "=== LAST 250 LINES ==="
-            tail -n 250 build.log
-          } > build-fail.txt 2>&1 || true
-
-          git config user.name "ci-bot"
-          git config user.email "ci-bot@users.noreply.github.com"
-          git checkout --orphan ci-logs
-          git rm -rf --cached . >/dev/null 2>&1 || true
-          mkdir -p logs
-          cp build-fail.txt "logs/run-${{ github.run_number }}.txt"
-          git add -f "logs/run-${{ github.run_number }}.txt"
-          git commit -m "build failure log for run ${{ github.run_number }}" || exit 0
-          git push -f origin ci-logs
