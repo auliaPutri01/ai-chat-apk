@@ -18,6 +18,8 @@ jobs:
     name: Build Debug APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -36,7 +38,11 @@ jobs:
           export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1 || true)"
           if [ -z "$SDKMANAGER" ]; then
-            SDKMANAGER="$(command -v sdkmanager)"
+            SDKMANAGER="$(command -v sdkmanager || true)"
+          fi
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::Could not find Android sdkmanager in ANDROID_HOME or PATH."
+            exit 1
           fi
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
@@ -60,9 +66,12 @@ jobs:
           fi
 
       - name: Build Debug APK
-        run: gradle :app:assembleDebug --stacktrace --no-daemon
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee build.log
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: AI-Hub-app-debug
@@ -70,12 +79,38 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload build reports (jika gagal)
+      - name: Upload build diagnostics (jika gagal)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: build-reports
+          name: build-diagnostics
           path: |
+            build.log
             app/build/reports/
           if-no-files-found: ignore
           retention-days: 7
+
+  publish:
+    name: Publish APK to GitHub Release
+    needs: build
+    # Temporary: allow this working branch to publish before it is merged to main.
+    # Remove the working-branch clause after the merge.
+    if: ${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/01a0f81f-ai-hub') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AI-Hub-app-debug
+          path: dist
+
+      - name: Publish APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: AI Hub debug build ${{ github.run_number }}
+          prerelease: true
+          files: dist/*.apk
