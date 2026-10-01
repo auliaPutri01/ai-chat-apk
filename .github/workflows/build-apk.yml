@@ -1,0 +1,92 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Verify build config
+        shell: bash
+        run: |
+          echo "--- versi yang dipakai commit ini ---"
+          grep -nE '^(agp|kotlin|composeBom|coreKtx|googleDevtoolsKsp) ' gradle/libs.versions.toml
+          grep -nE 'compileSdk|VERSION_|jvmTarget' app/build.gradle.kts
+          grep -q 'agp = "8.13.0"' gradle/libs.versions.toml || { echo "::error::AGP bukan 8.13.0 - file Gradle belum diperbarui di commit ini"; exit 1; }
+          grep -q 'compileSdk = 36' app/build.gradle.kts || { echo "::error::compileSdk bukan 36 - file Gradle belum diperbarui di commit ini"; exit 1; }
+
+      - name: Set up Android SDK (API 36)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1 || true)"
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER="$(command -v sdkmanager)"
+          fi
+          echo "Menggunakan sdkmanager: $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Prepare .env
+        shell: bash
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "${GEMINI_API_KEY:-}" ]; then
+            echo "GEMINI_API_KEY=${GEMINI_API_KEY}" > .env
+          else
+            touch .env   # fallback ke nilai placeholder di .env.example
+          fi
+
+      - name: Build Debug APK
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI-Hub-app-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build reports (jika gagal)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-reports
+          path: |
+            app/build/reports/
+            **/build/reports/problems/
+          if-no-files-found: ignore
+          retention-days: 7
