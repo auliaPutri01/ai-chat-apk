@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.GptEmerald
@@ -40,6 +42,8 @@ fun ChatTopBar(
     activeModel: String,
     hasApiKey: Boolean,
     hasMessages: Boolean,
+    /** Nama profil API yang sedang aktif (ditampilkan di pemilih model). */
+    activeProfileName: String? = null,
     onOpenDrawer: () -> Unit,
     onOpenModelSelector: () -> Unit,
     onOpenConfig: () -> Unit,
@@ -89,12 +93,27 @@ fun ChatTopBar(
                         .background(if (hasApiKey) GptEmerald else StatusWarning)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = activeModel,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
+                // Nama profil aktif di baris atas, nama model di bawahnya.
+                Column(horizontalAlignment = Alignment.Start) {
+                    if (!activeProfileName.isNullOrBlank()) {
+                        Text(
+                            text = activeProfileName,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = GptEmerald
+                        )
+                    }
+                    Text(
+                        text = activeModel,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = if (activeProfileName.isNullOrBlank()) 13.sp else 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
                 Spacer(modifier = Modifier.width(4.dp))
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowDown,

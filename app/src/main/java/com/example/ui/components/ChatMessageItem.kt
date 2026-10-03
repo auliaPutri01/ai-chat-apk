@@ -37,8 +37,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.entity.ChatMessageEntity
+import com.example.data.model.Attachment
+import com.example.data.model.AttachmentCodec
 import com.example.ui.theme.GptEmerald
 import com.example.ui.theme.StatusError
+
+/** Lampiran pesan ini; pesan assistant tidak pernah punya lampiran. */
+private fun messageAttachments(message: ChatMessageEntity): List<Attachment> =
+    AttachmentCodec.fromJson(message.attachmentsJson)
 
 @Composable
 fun ChatMessageItem(
@@ -62,6 +68,10 @@ fun ChatMessageItem(
                 horizontalAlignment = Alignment.End,
                 modifier = Modifier.fillMaxWidth(0.88f)
             ) {
+                // Thumbnail gambar & chip berkas dari lampiran pesan ini
+                MessageAttachments(attachments = messageAttachments(message))
+
+                if (message.content.isNotBlank()) {
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp))
@@ -76,6 +86,7 @@ fun ChatMessageItem(
                             lineHeight = 22.sp
                         )
                     )
+                }
                 }
             }
         } else {
@@ -177,6 +188,9 @@ fun ChatMessageItem(
                             isStreaming = message.status == "SENDING"
                         )
                     }
+
+                    // Penanda profil penjawab bila jawaban datang dari profil cadangan
+                    ServedByChip(servedBy = message.servedBy)
 
                     // Bottom Action Icons (Copy, Retry)
                     if (message.status != "SENDING" && message.content.isNotEmpty()) {

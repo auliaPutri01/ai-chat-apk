@@ -69,8 +69,17 @@ jobs:
             touch .env   # fallback ke nilai placeholder di .env.example
           fi
 
+      - name: Run unit tests
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle :app:testDebugUnitTest --no-daemon 2>&1 | tee build.log
+
       - name: Build Debug APK
-        run: gradle :app:assembleDebug --stacktrace --no-daemon
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee -a build.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -80,6 +89,19 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Publish APK to GitHub Release
+        # Hanya di main: setiap push ke main menerbitkan rilis debug (prerelease).
+        # PR tidak menerbitkan rilis. Step ini ikut dikembalikan karena hilang saat
+        # commit "Upload ulang proyek utuh dan hapus kode lama", padahal spesifikasi
+        # meminta artefak tersedia di halaman Releases.
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: AI Hub debug build ${{ github.run_number }}
+          prerelease: true
+          files: app/build/outputs/apk/debug/*.apk
+
       - name: Upload build reports (jika gagal)
         if: failure()
         uses: actions/upload-artifact@v4
@@ -87,6 +109,16 @@ jobs:
           name: build-reports
           path: |
             app/build/reports/
+            app/build/test-results/
             **/build/reports/problems/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload build log (jika gagal)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
           if-no-files-found: ignore
           retention-days: 7

@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
@@ -43,6 +44,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.Attachment
 import com.example.ui.theme.GptEmerald
 
 @Composable
@@ -55,8 +57,14 @@ fun ChatInputBar(
     onOpenGeminiStudio: () -> Unit,
     showSuggestions: Boolean = false,
     onSelectSuggestion: (String) -> Unit = {},
+    /** Lampiran yang menunggu dikirim. */
+    attachments: List<Attachment> = emptyList(),
+    onRemoveAttachment: (String) -> Unit = {},
+    onOpenAttachmentPicker: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    // Kirim aktif jika ada teks ATAU ada lampiran.
+    val canSend = inputText.isNotBlank() || attachments.isNotEmpty()
     val suggestions = listOf(
         "✨ Gemini 3.5: Jelaskan cara kerja AI multimodal",
         "📍 Maps: Kafe terbaik dekat sini",
@@ -103,6 +111,12 @@ fun ChatInputBar(
             }
         }
 
+        // Chip lampiran yang menunggu dikirim (thumbnail untuk gambar)
+        PendingAttachmentRow(
+            attachments = attachments,
+            onRemove = onRemoveAttachment
+        )
+
         // ChatGPT-style Floating Input Bar
         Row(
             modifier = Modifier
@@ -113,6 +127,27 @@ fun ChatInputBar(
                 .testTag("chat_input_bar"),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Tombol "+" untuk melampirkan gambar / berkas / ZIP
+            IconButton(
+                onClick = onOpenAttachmentPicker,
+                modifier = Modifier
+                    .size(34.dp)
+                    .testTag("open_attachment_picker_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Lampirkan gambar, berkas, atau ZIP",
+                    tint = if (attachments.isEmpty()) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        GptEmerald
+                    },
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(2.dp))
+
             // Quick Gemini / Veo Tools Icon inside input bar
             IconButton(
                 onClick = onOpenGeminiStudio,
@@ -159,7 +194,7 @@ fun ChatInputBar(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
                     keyboardActions = KeyboardActions(
                         onSend = {
-                            if (inputText.isNotBlank() && !isGenerating) {
+                            if (canSend && !isGenerating) {
                                 onSendMessage(inputText)
                             }
                         }
@@ -206,7 +241,6 @@ fun ChatInputBar(
                     )
                 }
             } else {
-                val canSend = inputText.isNotBlank()
                 Box(
                     modifier = Modifier
                         .size(36.dp)
