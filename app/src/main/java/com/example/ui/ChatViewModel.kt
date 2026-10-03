@@ -8,7 +8,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.local.entity.ApiConfigEntity
 import com.example.data.local.entity.ChatMessageEntity
 import com.example.data.local.entity.ChatSessionEntity
+import com.example.data.remote.ConfigNormalizer
 import com.example.data.repository.ChatRepository
+import com.example.data.security.ApiKeyStatus
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,6 +32,14 @@ sealed interface TestConnectionState {
     data class Failure(val error: String) : TestConnectionState
 }
 
+/** Status tombol "Ambil daftar model" (GET {baseUrl}/models). */
+sealed interface ModelListState {
+    data object Idle : ModelListState
+    data object Loading : ModelListState
+    data class Loaded(val models: List<String>) : ModelListState
+    data class Failed(val message: String) : ModelListState
+}
+
 class ChatViewModel(
     private val repository: ChatRepository
 ) : ViewModel() {
@@ -39,6 +49,17 @@ class ChatViewModel(
 
     val apiConfig: StateFlow<ApiConfigEntity?> = repository.activeConfig
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** Semua profil tersimpan (API Key sudah didekripsi di lapisan repository). */
+    val profiles: StateFlow<List<ApiConfigEntity>> = repository.allApiConfigs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Status key profil aktif: OK / belum diisi / data lama / gagal didekripsi. */
+    val apiKeyStatus: StateFlow<ApiKeyStatus> = repository.keyStatus
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ApiKeyStatus.MISSING)
+
+    private val _modelListStatus = MutableStateFlow<ModelListState>(ModelListState.Idle)
+    val modelListStatus: StateFlow<ModelListState> = _modelListStatus.asStateFlow()
 
     private val _currentSessionId = MutableStateFlow<String?>(null)
     val currentSessionId: StateFlow<String?> = _currentSessionId.asStateFlow()
@@ -463,8 +484,13 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Menyimpan profil. [profileId] null/kosong berarti profil BARU dengan id unik (UUID).
+     * Input dirapikan (ConfigNormalizer) dan API Key dienkripsi di lapisan repository.
+     */
     fun saveConfig(
-        providerName: String,
+        profileId: String?,
+        profileName: String,
         baseUrl: String,
         apiKey: String,
         model: String,
@@ -472,17 +498,35 @@ class ChatViewModel(
         temperature: Float
     ) {
         viewModelScope.launch {
+            val targetId = profileId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
             val updated = ApiConfigEntity(
-                id = "default_config",
-                providerName = providerName,
-                baseUrl = baseUrl.trim(),
-                apiKey = apiKey.trim(),
-                model = model.trim().ifEmpty { "gemini-3.5-flash" },
-                systemPrompt = systemPrompt.trim(),
+                id = targetId,
+                providerName = ConfigNormalizer.normalizeProfileName(profileName).ifEmpty { "Profil Baru" },
+                baseUrl = baseUrl,
+                apiKey = apiKey,
+                model = model,
+                systemPrompt = systemPrompt,
                 temperature = temperature,
                 isActive = true
             )
             repository.saveApiConfig(updated)
+            _testStatus.value = TestConnectionState.Idle
+        }
+    }
+
+    /** Mengaktifkan profil lain; hanya satu profil yang aktif pada satu waktu. */
+    fun selectProfile(profileId: String) {
+        viewModelScope.launch {
+            repository.activateProfile(profileId)
+            _testStatus.value = TestConnectionState.Idle
+            _modelListStatus.value = ModelListState.Idle
+        }
+    }
+
+    /** Menghapus profil; kalau profil yang dihapus sedang aktif, profil lain dipakai otomatis. */
+    fun deleteProfile(profileId: String) {
+        viewModelScope.launch {
+            repository.deleteProfile(profileId)
             _testStatus.value = TestConnectionState.Idle
         }
     }
@@ -497,6 +541,23 @@ class ChatViewModel(
                 _testStatus.value = TestConnectionState.Failure(err.localizedMessage ?: "Koneksi gagal")
             }
         }
+    }
+
+    /** Mengambil daftar model dari GET {baseUrl}/models. Input manual tetap boleh. */
+    fun fetchModels(baseUrl: String, apiKey: String) {
+        viewModelScope.launch {
+            _modelListStatus.value = ModelListState.Loading
+            val res = repository.fetchAvailableModels(baseUrl, apiKey)
+            res.onSuccess { models ->
+                _modelListStatus.value = ModelListState.Loaded(models)
+            }.onFailure { err ->
+                _modelListStatus.value = ModelListState.Failed(err.localizedMessage ?: "Gagal mengambil daftar model")
+            }
+        }
+    }
+
+    fun resetModelList() {
+        _modelListStatus.value = ModelListState.Idle
     }
 
     fun resetTestStatus() {

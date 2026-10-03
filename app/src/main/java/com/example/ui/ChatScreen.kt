@@ -77,6 +77,9 @@ fun ChatScreen(
     val apiConfig by viewModel.apiConfig.collectAsStateWithLifecycle()
     val isGenerating by viewModel.isGenerating.collectAsStateWithLifecycle()
     val testStatus by viewModel.testStatus.collectAsStateWithLifecycle()
+    val profiles by viewModel.profiles.collectAsStateWithLifecycle()
+    val apiKeyStatus by viewModel.apiKeyStatus.collectAsStateWithLifecycle()
+    val modelListStatus by viewModel.modelListStatus.collectAsStateWithLifecycle()
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -90,6 +93,7 @@ fun ChatScreen(
 
     val hasApiKey = !apiConfig?.apiKey.isNullOrBlank()
     val activeModel = apiConfig?.model ?: "gemini-3.5-flash"
+    val activeProfileName = apiConfig?.providerName
     val activeSession = sessions.find { it.id == currentSessionId }
     val activeTitle = activeSession?.title ?: "AI Hub Chat"
 
@@ -134,6 +138,7 @@ fun ChatScreen(
             topBar = {
                 ChatTopBar(
                     activeModel = activeModel,
+                    activeProfileName = activeProfileName,
                     hasApiKey = hasApiKey,
                     hasMessages = messages.isNotEmpty(),
                     onOpenDrawer = { scope.launch { drawerState.open() } },
@@ -371,14 +376,21 @@ fun ChatScreen(
     if (showConfigModal) {
         ApiConfigModal(
             currentConfig = apiConfig,
+            profiles = profiles,
             testState = testStatus,
-            onSave = { pName, url, key, mdl, sys, temp ->
-                viewModel.saveConfig(pName, url, key, mdl, sys, temp)
+            modelListState = modelListStatus,
+            apiKeyStatus = apiKeyStatus,
+            onSave = { profileId, pName, url, key, mdl, sys, temp ->
+                viewModel.saveConfig(profileId, pName, url, key, mdl, sys, temp)
             },
             onTestConnection = { url, key, mdl ->
                 viewModel.testApiConfig(url, key, mdl)
             },
+            onFetchModels = { url, key -> viewModel.fetchModels(url, key) },
+            onSelectProfile = { id -> viewModel.selectProfile(id) },
+            onDeleteProfile = { id -> viewModel.deleteProfile(id) },
             onResetTestStatus = { viewModel.resetTestStatus() },
+            onResetModelList = { viewModel.resetModelList() },
             onDismiss = { showConfigModal = false }
         )
     }
