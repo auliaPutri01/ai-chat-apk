@@ -130,6 +130,10 @@ dependencies {
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
+  // org.json asli untuk unit test JVM murni: stub android.jar membuat seluruh method
+  // org.json melempar "not mocked" sehingga pembangun payload JSON tidak bisa diuji.
+  // Versi dipin eksak (20240303) sesuai instruksi. Hanya dipakai di test.
+  testImplementation(libs.org.json)
 
   androidTestImplementation(platform(libs.androidx.compose.bom))
   androidTestImplementation(libs.androidx.compose.ui.test.junit4)
