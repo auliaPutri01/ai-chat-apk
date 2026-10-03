@@ -1,6 +1,10 @@
 package com.example.ui
 
 import androidx.activity.compose.BackHandler
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -48,20 +52,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.attachment.AttachmentLimits
 import com.example.ui.components.ApiConfigModal
+import com.example.ui.components.AttachmentPickerSheet
 import com.example.ui.components.ChatDrawerContent
+import com.example.ui.components.ZipContentSheet
 import com.example.ui.components.ChatInputBar
 import com.example.ui.components.ChatMessageItem
 import com.example.ui.components.ChatTopBar
 import com.example.ui.components.ExportArtifactDialog
 import com.example.ui.components.GeminiFeaturesModal
 import com.example.ui.components.ModelSelectorDialog
+import com.example.ui.ZipPickerState
 import com.example.ui.theme.GptEmerald
 import com.example.ui.theme.StatusWarning
 import kotlinx.coroutines.launch
@@ -80,6 +89,36 @@ fun ChatScreen(
     val profiles by viewModel.profiles.collectAsStateWithLifecycle()
     val apiKeyStatus by viewModel.apiKeyStatus.collectAsStateWithLifecycle()
     val modelListStatus by viewModel.modelListStatus.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val pendingAttachments by viewModel.pendingAttachments.collectAsStateWithLifecycle()
+    val attachmentNotice by viewModel.attachmentNotice.collectAsStateWithLifecycle()
+    val zipPickerState by viewModel.zipPickerState.collectAsStateWithLifecycle()
+
+    var showAttachmentPicker by remember { mutableStateOf(false) }
+
+    // Pemilih lampiran: galeri (multi), berkas (multi), dan ZIP (satu berkas).
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(
+            AttachmentLimits.MAX_IMAGES_PER_MESSAGE
+        )
+    ) { uris -> viewModel.addPickedImages(uris) }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris -> viewModel.addPickedTextFiles(uris) }
+
+    val zipPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let { viewModel.startZipImport(listOf(it)) } }
+
+    // Pesan singkat lampiran (tidak pernah memuat API key).
+    LaunchedEffect(attachmentNotice) {
+        val notice = attachmentNotice
+        if (!notice.isNullOrBlank()) {
+            Toast.makeText(context, notice, Toast.LENGTH_LONG).show()
+            viewModel.clearAttachmentNotice()
+        }
+    }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -155,15 +194,19 @@ fun ChatScreen(
                     onInputChange = { inputText = it },
                     isGenerating = isGenerating,
                     onSendMessage = { text ->
-                        viewModel.sendMessage(text)
+                        viewModel.sendMessage(text, pendingAttachments)
                         inputText = ""
                     },
                     onStopGeneration = { viewModel.stopGeneration() },
                     onOpenGeminiStudio = { showGeminiStudio = true },
                     showSuggestions = messages.isEmpty(),
                     onSelectSuggestion = { suggestion ->
-                        viewModel.sendMessage(suggestion)
-                    }
+                        viewModel.sendMessage(suggestion, pendingAttachments)
+                        inputText = ""
+                    },
+                    attachments = pendingAttachments,
+                    onRemoveAttachment = { id -> viewModel.removePendingAttachment(id) },
+                    onOpenAttachmentPicker = { showAttachmentPicker = true }
                 )
             },
             modifier = modifier.fillMaxSize()
@@ -380,8 +423,8 @@ fun ChatScreen(
             testState = testStatus,
             modelListState = modelListStatus,
             apiKeyStatus = apiKeyStatus,
-            onSave = { profileId, pName, url, key, mdl, sys, temp ->
-                viewModel.saveConfig(profileId, pName, url, key, mdl, sys, temp)
+            onSave = { profileId, pName, url, key, mdl, sys, temp, vision, fallback ->
+                viewModel.saveConfig(profileId, pName, url, key, mdl, sys, temp, vision, fallback)
             },
             onTestConnection = { url, key, mdl ->
                 viewModel.testApiConfig(url, key, mdl)
@@ -419,6 +462,38 @@ fun ChatScreen(
         GeminiFeaturesModal(
             viewModel = viewModel,
             onDismiss = { showGeminiStudio = false }
+        )
+    }
+
+    // Bottom sheet pemilih jenis lampiran (Gambar / File / ZIP)
+    if (showAttachmentPicker) {
+        AttachmentPickerSheet(
+            onPickImages = {
+                showAttachmentPicker = false
+                imagePickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            onPickFiles = {
+                showAttachmentPicker = false
+                // Selektor dibuat permisif; validasi teks/biner dilakukan setelah berkas dipilih.
+                filePickerLauncher.launch(arrayOf("*/*"))
+            },
+            onPickZip = {
+                showAttachmentPicker = false
+                zipPickerLauncher.launch(arrayOf("*/*"))
+            },
+            onDismiss = { showAttachmentPicker = false }
+        )
+    }
+
+    // Bottom sheet isi ZIP: pohon berkas dengan centang + anggaran token
+    (zipPickerState as? ZipPickerState.Ready)?.let { state ->
+        ZipContentSheet(
+            scan = state.scan,
+            fileName = state.attachment.name,
+            onConfirm = { selected -> viewModel.confirmZipSelection(selected) },
+            onCancel = { viewModel.cancelZipImport() }
         )
     }
 }

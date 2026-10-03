@@ -38,6 +38,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +50,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -73,6 +76,7 @@ import com.example.data.local.entity.ApiConfigEntity
 import com.example.data.model.ProviderPresets
 import com.example.data.remote.ApiErrorFormatter
 import com.example.data.remote.ConfigNormalizer
+import com.example.data.remote.FallbackPolicy
 import com.example.data.security.ApiKeyStatus
 import com.example.ui.ModelListState
 import com.example.ui.TestConnectionState
@@ -98,7 +102,9 @@ fun ApiConfigModal(
         apiKey: String,
         model: String,
         systemPrompt: String,
-        temperature: Float
+        temperature: Float,
+        supportsVision: Boolean,
+        fallbackConfigId: String?
     ) -> Unit,
     onTestConnection: (baseUrl: String, apiKey: String, model: String) -> Unit,
     onFetchModels: (baseUrl: String, apiKey: String) -> Unit,
@@ -131,6 +137,22 @@ fun ApiConfigModal(
         mutableStateOf(matchPresetId(initialConfig?.baseUrl))
     }
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
+
+    // Profil: dukungan gambar + rantai cadangan
+    var supportsVision by remember(currentConfig?.id) {
+        mutableStateOf(initialConfig?.supportsVision ?: true)
+    }
+    var fallbackConfigId by remember(currentConfig?.id) {
+        mutableStateOf(initialConfig?.fallbackConfigId)
+    }
+    var fallbackMenuOpen by remember { mutableStateOf(false) }
+
+    val fallbackOptions = profiles.filter { it.id != editingProfileId }
+    val fallbackValidation = FallbackPolicy.validateFallbackTarget(
+        configId = editingProfileId.orEmpty().ifEmpty { "profil-baru" },
+        fallbackId = fallbackConfigId,
+        edges = profiles.associate { it.id to it.fallbackConfigId }
+    )
 
     val normalizedBaseUrlPreview = ConfigNormalizer.normalizeBaseUrl(baseUrl)
     val baseUrlHint = ConfigNormalizer.baseUrlWarning(normalizedBaseUrlPreview)
@@ -757,6 +779,106 @@ fun ApiConfigModal(
 
             Spacer(modifier = Modifier.height(14.dp))
 
+            // ------------------------------------------------ Vision + profil cadangan
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Model mendukung gambar",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Text(
+                        text = if (supportsVision) {
+                            "Gambar akan dikirim ke profil ini."
+                        } else {
+                            "Gambar dihilangkan dari pesan dan diganti catatan."
+                        },
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = supportsVision,
+                    onCheckedChange = { supportsVision = it },
+                    modifier = Modifier.testTag("supports_vision_switch")
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Profil cadangan (opsional)",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Box {
+                OutlinedButton(
+                    onClick = { fallbackMenuOpen = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("fallback_profile_selector")
+                ) {
+                    Text(
+                        text = fallbackOptions.find { it.id == fallbackConfigId }?.providerName
+                            ?: "Tidak ada cadangan",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+                DropdownMenu(
+                    expanded = fallbackMenuOpen,
+                    onDismissRequest = { fallbackMenuOpen = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Tidak ada cadangan") },
+                        onClick = {
+                            fallbackConfigId = null
+                            fallbackMenuOpen = false
+                        },
+                        modifier = Modifier.testTag("fallback_option_none")
+                    )
+                    fallbackOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    option.providerName.ifBlank { "Profil" } +
+                                        (option.model.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
+                                )
+                            },
+                            onClick = {
+                                fallbackConfigId = option.id
+                                fallbackMenuOpen = false
+                            },
+                            modifier = Modifier.testTag("fallback_option_" + option.id)
+                        )
+                    }
+                }
+            }
+            Text(
+                text = if (fallbackValidation.valid) {
+                    "Dipakai otomatis bila profil ini gagal (jaringan, timeout, 5xx, 429, atau 401/403/404). " +
+                        "Maksimal 2 cadangan berantai."
+                } else {
+                    fallbackValidation.message.orEmpty()
+                },
+                fontSize = 11.sp,
+                color = if (fallbackValidation.valid) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    StatusError
+                },
+                modifier = Modifier.testTag("fallback_help_text")
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
             // ------------------------------------------------ System Prompt
             Text(
                 text = "System Prompt (Instruksi Asisten)",
@@ -939,7 +1061,10 @@ fun ApiConfigModal(
                             // Kosong berarti "pakai model yang tersimpan" (repository menjaganya).
                             cleanModel,
                             systemPrompt,
-                            temperature
+                            temperature,
+                            supportsVision,
+                            // Tautan yang membentuk siklus tidak disimpan.
+                            fallbackConfigId.takeIf { fallbackValidation.valid }
                         )
                         // Toast tidak pernah memuat API Key.
                         Toast.makeText(context, "Profil tersimpan & diterapkan!", Toast.LENGTH_SHORT).show()

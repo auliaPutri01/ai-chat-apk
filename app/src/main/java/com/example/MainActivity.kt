@@ -11,6 +11,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.local.AppDatabase
 import com.example.data.repository.ChatRepository
 import com.example.ui.ChatScreen
+import com.example.data.attachment.AttachmentStore
 import com.example.ui.ChatViewModel
 import com.example.ui.ChatViewModelFactory
 import com.example.ui.theme.MyApplicationTheme
@@ -23,7 +24,8 @@ class MainActivity : ComponentActivity() {
         val database = AppDatabase.getDatabase(applicationContext)
         val repository = ChatRepository(
             chatDao = database.chatDao(),
-            apiConfigDao = database.apiConfigDao()
+            apiConfigDao = database.apiConfigDao(),
+            attachmentStore = AttachmentStore(applicationContext)
         )
 
         setContent {
