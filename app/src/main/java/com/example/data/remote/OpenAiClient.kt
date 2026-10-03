@@ -17,9 +17,21 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
 
+/**
+ * Satu pesan yang dikirim ke API.
+ *
+ * [images] berisi data URI gambar ("data:image/jpeg;base64,...").
+ * - Bila KOSONG  -> `content` dikirim sebagai string biasa (perilaku lama, tidak berubah).
+ * - Bila ADA     -> `content` dikirim sebagai array multimodal OpenAI:
+ *                   [{"type":"text","text":...},
+ *                    {"type":"image_url","image_url":{"url":"data:image/jpeg;base64,..."}}]
+ *
+ * Nilai default kosong membuat seluruh pemanggil lama tetap valid.
+ */
 data class MessagePayload(
     val role: String,
-    val content: String
+    val content: String,
+    val images: List<String> = emptyList()
 )
 
 class OpenAiClient(
@@ -84,7 +96,9 @@ class OpenAiClient(
             for (msg in messages) {
                 val msgObj = JSONObject().apply {
                     put("role", msg.role)
-                    put("content", msg.content)
+                    // Tanpa gambar: tetap string seperti sebelumnya.
+                    // Dengan gambar: array multimodal (text + image_url).
+                    put("content", MultimodalContent.contentFor(msg))
                 }
                 messagesArray.put(msgObj)
             }
@@ -115,7 +129,8 @@ class OpenAiClient(
                     httpStatusMessage = response.message,
                     baseUrl = url
                 )
-                close(Exception(detail))
+                // ApiHttpException membawa kode HTTP agar FallbackPolicy bisa memutuskan.
+                close(ApiHttpException(response.code, detail))
                 return@callbackFlow
             }
 

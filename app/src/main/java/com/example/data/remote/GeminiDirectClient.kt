@@ -73,9 +73,8 @@ class GeminiDirectClient(
                     val role = if (m.role == "user") "user" else "model"
                     contentsArray.put(JSONObject().apply {
                         put("role", role)
-                        put("parts", JSONArray().apply {
-                            put(JSONObject().apply { put("text", m.content) })
-                        })
+                        // Teks + inlineData (gambar) bila ada lampiran gambar.
+                        put("parts", MultimodalContent.geminiParts(m))
                     })
                 }
                 put("contents", contentsArray)

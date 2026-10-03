@@ -1,12 +1,23 @@
 package com.example.data.repository
 
 import android.graphics.Bitmap
+import com.example.data.attachment.AttachmentImporter
+import com.example.data.attachment.AttachmentStore
+import com.example.data.attachment.HistoryAttachmentPolicy
+import com.example.data.attachment.ImageProcessor
+import com.example.data.attachment.ZipEntryInfo
+import com.example.data.attachment.ZipScanResult
+import com.example.data.attachment.ZipScanner
 import com.example.data.local.dao.ApiConfigDao
 import com.example.data.local.dao.ChatDao
 import com.example.data.local.entity.ApiConfigEntity
 import com.example.data.local.entity.ChatMessageEntity
 import com.example.data.local.entity.ChatSessionEntity
+import com.example.data.model.Attachment
+import com.example.data.model.AttachmentCodec
+import com.example.data.model.AttachmentKind
 import com.example.data.remote.ConfigNormalizer
+import com.example.data.remote.FallbackPolicy
 import com.example.data.remote.GeminiDirectClient
 import com.example.data.remote.MessagePayload
 import com.example.data.remote.OpenAiClient
@@ -23,22 +34,37 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 
+/** Hasil satu percobaan memanggil model (satu profil). */
+sealed interface FallbackResult {
+    /** Berhasil. [usedFallback] true bila bukan profil utama yang menjawab. */
+    data class Success(
+        val servedBy: String,
+        val usedFallback: Boolean,
+        val fallbackReason: String?
+    ) : FallbackResult
+
+    /** Semua profil di rantai gagal (atau kegagalan yang tidak boleh di-fallback). */
+    data class Failure(
+        val message: String,
+        val configSuspect: Boolean
+    ) : FallbackResult
+}
+
 /**
- * Satu-satunya lapisan yang tahu soal enkripsi API Key.
+ * Satu-satunya lapisan yang tahu soal:
+ * - enkripsi API Key ([saveApiConfig] mengenkripsi, [activeConfig]/[allApiConfigs] mendekripsi),
+ * - penyimpanan & pembersihan file lampiran,
+ * - rantai fallback antar profil API.
  *
- * - [saveApiConfig] MENGENKRIPSI key sebelum ditulis ke Room.
- * - [activeConfig] dan [allApiConfigs] MENDEDKRIPSI key sebelum diberikan ke ViewModel,
- *   sehingga ChatViewModel dan seluruh fitur Gemini/Veo tetap menerima key teks biasa
- *   tanpa perubahan apa pun.
- *
- * Baris lama yang masih teks biasa tetap terbaca dan otomatis dienkripsi ulang saat disimpan.
+ * ChatViewModel dan fitur Gemini/Veo tetap menerima key teks biasa seperti sebelumnya.
  */
 class ChatRepository(
     private val chatDao: ChatDao,
     private val apiConfigDao: ApiConfigDao,
     private val openAiClient: OpenAiClient = OpenAiClient(),
     val geminiClient: GeminiDirectClient = GeminiDirectClient(),
-    private val keyCipher: KeyCipher = KeyCipher()
+    private val keyCipher: KeyCipher = KeyCipher(),
+    private val attachmentStore: AttachmentStore? = null
 ) {
     val allSessions: Flow<List<ChatSessionEntity>> = chatDao.getAllSessions()
 
@@ -58,8 +84,6 @@ class ChatRepository(
         if (current == null) {
             val all = apiConfigDao.getAllConfigsOnce()
             if (all.isNotEmpty()) {
-                // Ada profil tersimpan tapi tidak ada yang aktif (mis. setelah penghapusan):
-                // jangan buat profil baru, cukup aktifkan salah satu supaya chat tetap jalan.
                 apiConfigDao.activateConfig(all.first().id)
             } else {
                 val defaultConfig = ApiConfigEntity(
@@ -111,12 +135,18 @@ class ChatRepository(
             }
         }
 
+    /** Menghapus sesi beserta seluruh lampiran pesannya. */
     suspend fun deleteSession(sessionId: String) = withContext(Dispatchers.IO) {
+        chatDao.getMessagesForSessionOnce(sessionId).forEach { message ->
+            attachmentStore?.deleteForAttachmentsJson(message.attachmentsJson)
+        }
         chatDao.deleteSessionAndMessages(sessionId)
     }
 
+    /** Menghapus seluruh data chat beserta seluruh folder lampiran. */
     suspend fun clearAll() = withContext(Dispatchers.IO) {
         chatDao.clearAll()
+        attachmentStore?.deleteAll()
     }
 
     suspend fun insertMessage(message: ChatMessageEntity) = withContext(Dispatchers.IO) {
@@ -127,38 +157,141 @@ class ChatRepository(
         chatDao.updateMessage(message)
     }
 
+    /** Menghapus satu pesan beserta foldernya di filesDir/attachments/<id>/. */
     suspend fun deleteMessage(messageId: String) = withContext(Dispatchers.IO) {
+        val existing = chatDao.getMessageById(messageId)
+        attachmentStore?.deleteForAttachmentsJson(existing?.attachmentsJson)
         chatDao.deleteMessage(messageId)
     }
 
+    // ------------------------------------------------------------- lampiran
+
+    /** Menyalin lampiran dari picker ke penyimpanan internal. */
+    suspend fun storeAttachment(
+        uri: android.net.Uri,
+        kind: AttachmentKind,
+        displayName: String,
+        mime: String,
+        textContent: String? = null
+    ): Result<Attachment> {
+        val store = attachmentStore
+            ?: return Result.failure(Exception("Penyimpanan lampiran tidak tersedia"))
+        return store.copyFromUri(uri, kind, displayName, mime, textContent)
+    }
+
+    /** Menyimpan lampiran ZIP yang sudah dirakit menjadi teks (tanpa URI asal). */
+    suspend fun storeZipBundle(textContent: String, displayName: String, sizeBytes: Long): Attachment? {
+        val store = attachmentStore ?: return null
+        val uri = writeTempFile(textContent, displayName) ?: return null
+        val result = store.copyFromUri(
+            uri = uri,
+            kind = AttachmentKind.ZIP_BUNDLE,
+            displayName = displayName,
+            mime = "application/zip",
+            textContent = textContent
+        )
+        runCatching { File(uri.path.orEmpty()).delete() }
+        return result.getOrNull()?.copy(sizeBytes = sizeBytes)
+    }
+
+    /** Menulis berkas sementara di cache untuk dipakai copyFromUri. */
+    private suspend fun writeTempFile(content: String, displayName: String): android.net.Uri? =
+        withContext(Dispatchers.IO) {
+            try {
+                val store = attachmentStore ?: return@withContext null
+                val safeName = store.sanitize(displayName)
+                val temp = File.createTempFile("bundle_", "_" + safeName)
+                temp.writeText(content)
+                android.net.Uri.fromFile(temp)
+            } catch (t: Throwable) {
+                null
+            }
+        }
+
+    suspend fun deleteAttachment(attachment: Attachment) {
+        attachmentStore?.deleteAttachment(attachment)
+    }
+
+    /** Mengimpor gambar dari picker. */
+    suspend fun importImage(uri: android.net.Uri): AttachmentImporter.Outcome {
+        val store = attachmentStore
+            ?: return AttachmentImporter.Outcome.Rejected("Penyimpanan lampiran tidak tersedia")
+        return store.importer().importImage(uri)
+    }
+
+    /** Mengimpor berkas teks dari picker (validasi ukuran & biner di dalam). */
+    suspend fun importTextFile(uri: android.net.Uri): AttachmentImporter.Outcome {
+        val store = attachmentStore
+            ?: return AttachmentImporter.Outcome.Rejected("Penyimpanan lampiran tidak tersedia")
+        return store.importer().importTextFile(uri)
+    }
+
+    /** Mengimpor ZIP (disalin dulu; isinya dibaca terpisah tanpa ekstrak ke disk). */
+    suspend fun importZip(uri: android.net.Uri): AttachmentImporter.Outcome {
+        val store = attachmentStore
+            ?: return AttachmentImporter.Outcome.Rejected("Penyimpanan lampiran tidak tersedia")
+        return store.importer().importZip(uri)
+    }
+
+    /** Memindai isi ZIP yang sudah disalin. */
+    suspend fun scanZip(attachment: Attachment): ZipScanResult = withContext(Dispatchers.IO) {
+        ZipScanner().scan(File(attachment.path))
+    }
+
+    /** Menyusun teks akhir ZIP dari pilihan pengguna, lalu menyimpan lampirannya. */
+    suspend fun finalizeZipAttachment(
+        attachment: Attachment,
+        tree: String,
+        selected: List<ZipEntryInfo>
+    ): Attachment = attachment.copy(
+        textContent = ZipScanner().buildBundleText(tree, selected),
+        kind = AttachmentKind.ZIP_BUNDLE
+    )
+
+    // ------------------------------------------------------------- enkripsi
+
     /**
-     * Menyimpan profil: input dirapikan lewat [ConfigNormalizer], key DIENKRIPSI,
-     * lalu profil ini dijadikan satu-satunya profil aktif.
+     * Merapikan input, mengenkripsi key, memvalidasi rantai fallback, dan menyimpan.
+     * Key lama dipertahankan bila field key dikosongkan.
      */
     suspend fun saveApiConfig(config: ApiConfigEntity) = withContext(Dispatchers.IO) {
         val existing = apiConfigDao.getConfigById(config.id)
-        val prepared = prepareForStorage(config, existing)
+        val sanitized = sanitizeFallback(config)
+        val prepared = prepareForStorage(sanitized, existing)
         apiConfigDao.deactivateAll()
         apiConfigDao.insertOrUpdate(prepared.copy(isActive = true))
     }
 
-    /** Mengaktifkan satu profil; semua profil lain dinonaktifkan (hanya satu yang aktif). */
+    /** Membuang tautan fallback yang membentuk siklus atau menunjuk ke diri sendiri. */
+    private suspend fun sanitizeFallback(config: ApiConfigEntity): ApiConfigEntity {
+        val target = config.fallbackConfigId?.trim().orEmpty()
+        if (target.isEmpty()) {
+            return if (config.fallbackConfigId == null) config else config.copy(fallbackConfigId = null)
+        }
+        val edges = apiConfigDao.getAllConfigsOnce().associate { it.id to it.fallbackConfigId }
+        val validation = FallbackPolicy.validateFallbackTarget(config.id, target, edges)
+        return if (validation.valid) config.copy(fallbackConfigId = target) else config.copy(fallbackConfigId = null)
+    }
+
     suspend fun activateProfile(profileId: String) = withContext(Dispatchers.IO) {
         apiConfigDao.deactivateAll()
         apiConfigDao.activateConfig(profileId)
     }
 
-    /** Menghapus profil. Bila yang dihapus sedang aktif, profil lain otomatis diaktifkan. */
     suspend fun deleteProfile(profileId: String) = withContext(Dispatchers.IO) {
         apiConfigDao.deleteConfig(profileId)
         val remaining = apiConfigDao.getAllConfigsOnce()
-        if (remaining.isNotEmpty() && remaining.none { it.isActive }) {
+        // Profil yang menunjuk ke profil terhapus: bersihkan tautannya.
+        remaining.filter { it.fallbackConfigId == profileId }.forEach { stale ->
+            apiConfigDao.insertOrUpdate(stale.copy(fallbackConfigId = null))
+        }
+        val refreshed = apiConfigDao.getAllConfigsOnce()
+        if (refreshed.isNotEmpty() && refreshed.none { it.isActive }) {
             apiConfigDao.deactivateAll()
-            apiConfigDao.activateConfig(remaining.first().id)
+            apiConfigDao.activateConfig(refreshed.first().id)
         }
     }
 
-    /** Membuat profil baru dengan id unik (UUID). */
     suspend fun createProfile(
         profileName: String,
         baseUrl: String,
@@ -193,111 +326,226 @@ class ChatRepository(
         )
     }
 
-    /** Mengambil daftar model dari GET {baseUrl}/models. */
     suspend fun fetchAvailableModels(baseUrl: String, apiKey: String): Result<List<String>> {
         val normalized = ConfigNormalizer.normalize(baseUrl, apiKey, null)
-        return openAiClient.fetchModels(
-            baseUrl = normalized.baseUrl,
-            apiKey = normalized.apiKey
+        return openAiClient.fetchModels(baseUrl = normalized.baseUrl, apiKey = normalized.apiKey)
+    }
+
+    // ------------------------------------------------------- rantai fallback
+
+    /** Menyusun rantai profil: utama + maksimal 2 cadangan, aman terhadap siklus. */
+    suspend fun buildProfileChain(activeConfig: ApiConfigEntity): List<ApiConfigEntity> =
+        withContext(Dispatchers.IO) {
+            val all = apiConfigDao.getAllConfigsOnce().associateBy { it.id }
+            val chain = mutableListOf<ApiConfigEntity>()
+            val visited = mutableSetOf<String>()
+            var current: ApiConfigEntity? = all[activeConfig.id] ?: activeConfig
+
+            while (current != null && chain.size < FallbackPolicy.MAX_CHAIN_SIZE) {
+                if (!visited.add(current.id)) break // cegah siklus A -> B -> A
+                chain.add(toPlainConfig(current))
+                current = current.fallbackConfigId?.let { all[it] }
+            }
+            chain
+        }
+
+    /**
+     * Menjalankan permintaan ke profile-chain dengan fallback.
+     *
+     * Fallback hanya terjadi bila BELUM ada token diterima dari profil sebelumnya, supaya
+     * jawaban tidak tersambung dari dua model berbeda secara diam-diam. [onToken] dipanggil
+     * untuk setiap potongan teks (streaming).
+     */
+    suspend fun executeWithFallback(
+        chain: List<ApiConfigEntity>,
+        history: List<ChatMessageEntity>,
+        isCancelled: () -> Boolean = { false },
+        onToken: suspend (String) -> Unit
+    ): FallbackResult {
+        if (chain.isEmpty()) {
+            return FallbackResult.Failure("Tidak ada profil aktif. Buka Pengaturan untuk mengisi profil.", false)
+        }
+
+        val failures = mutableListOf<Pair<String, String>>()
+        var anyConfigSuspect = false
+
+        for ((index, profile) in chain.withIndex()) {
+            val normalized = ConfigNormalizer.normalize(profile.baseUrl, profile.apiKey, profile.model)
+            val profileName = profile.providerName.ifBlank { "Profil " + (index + 1) }
+            val modelName = normalized.model.ifEmpty { profile.model }
+            val isGeminiDirect = modelName.startsWith("gemini-") || modelName.startsWith("veo-")
+
+            if (normalized.baseUrl.isBlank() && !isGeminiDirect) {
+                failures.add(profileName to "Base URL kosong")
+                if (index < chain.size - 1) continue else break
+            }
+
+            var tokensReceived = 0
+            val reason = if (index == 0) null else failures.lastOrNull()?.second
+
+            try {
+                val payloads = buildPayloads(
+                    history = history,
+                    systemPrompt = profile.systemPrompt,
+                    supportsVision = profile.supportsVision
+                )
+
+                if (isGeminiDirect) {
+                    val result = geminiClient.generateChat(
+                        model = modelName,
+                        systemInstruction = profile.systemPrompt,
+                        messages = payloads,
+                        temperature = profile.temperature,
+                        customApiKey = normalized.apiKey
+                    )
+                    result.onSuccess { text ->
+                        onToken(text)
+                        return FallbackResult.Success(profileName, index > 0, reason)
+                    }.onFailure { error ->
+                        val decision = FallbackPolicy.decide(
+                            httpCode = null,
+                            throwable = error,
+                            cancelledByUser = isCancelled(),
+                            tokensReceived = tokensReceived
+                        )
+                        if (!decision.shouldFallback) {
+                            return FallbackResult.Failure(
+                                "Gagal mendapatkan respons dari model $modelName:\n" +
+                                    (error.localizedMessage ?: "kesalahan tidak diketahui"),
+                                decision.configSuspect
+                            )
+                        }
+                        failures.add(profileName to decision.reason)
+                        if (decision.configSuspect) anyConfigSuspect = true
+                    }
+                } else {
+                    // Stream selesai tanpa exception -> berhasil. Kegagalan (termasuk
+                    // pembatalan pengguna) dilempar sebagai exception dan ditangani di catch.
+                    openAiClient.streamChat(
+                        baseUrl = normalized.baseUrl,
+                        apiKey = normalized.apiKey,
+                        model = modelName,
+                        messages = payloads,
+                        temperature = profile.temperature
+                    ).collect { chunk ->
+                        tokensReceived++
+                        onToken(chunk)
+                    }
+                    return FallbackResult.Success(profileName, index > 0, reason)
+                }
+            } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                // Pembatalan oleh pengguna harus diteruskan (structured concurrency),
+                // bukan diubah menjadi kegagalan fallback.
+                throw cancellation
+            } catch (t: Throwable) {
+                val httpCode = (t as? com.example.data.remote.ApiHttpException)?.httpCode
+                val decision = FallbackPolicy.decide(
+                    httpCode = httpCode,
+                    throwable = t,
+                    cancelledByUser = isCancelled(),
+                    tokensReceived = tokensReceived
+                )
+
+                if (!decision.shouldFallback) {
+                    val detail = t.message ?: t.localizedMessage ?: "kesalahan tidak diketahui"
+                    return FallbackResult.Failure(detail, decision.configSuspect)
+                }
+
+                failures.add(profileName to decision.reason)
+                if (decision.configSuspect) anyConfigSuspect = true
+            }
+        }
+
+        return FallbackResult.Failure(
+            FallbackPolicy.failureSummary(failures).ifBlank { "Semua profil gagal." },
+            anyConfigSuspect
         )
     }
 
+    /**
+     * Streaming ke satu profil saja (tanpa fallback).
+     *
+     * Dipertahankan sebagai API publik yang sudah ada sebelumnya; jalur utama aplikasi
+     * memakai [executeWithFallback] yang menambahkan rantai profil cadangan.
+     */
     fun streamAiResponse(
         baseUrl: String,
         apiKey: String,
         model: String,
         history: List<ChatMessageEntity>,
         systemPrompt: String = "",
-        temperature: Float = 0.7f
+        temperature: Float = 0.7f,
+        supportsVision: Boolean = true
     ): Flow<String> {
         val normalized = ConfigNormalizer.normalize(baseUrl, apiKey, model)
+        return kotlinx.coroutines.flow.flow {
+            val payloads = buildPayloads(
+                history = history,
+                systemPrompt = systemPrompt,
+                supportsVision = supportsVision
+            )
+            openAiClient.streamChat(
+                baseUrl = normalized.baseUrl,
+                apiKey = normalized.apiKey,
+                model = normalized.model,
+                messages = payloads,
+                temperature = temperature
+            ).collect { emit(it) }
+        }
+    }
+
+    /**
+     * Menyusun payload: menggabungkan lampiran ke teks pesan dan memproses gambar
+     * menjadi data URI. Gambar hanya ikut bila profil mendukung vision.
+     */
+    private suspend fun buildPayloads(
+        history: List<ChatMessageEntity>,
+        systemPrompt: String,
+        supportsVision: Boolean
+    ): List<MessagePayload> = withContext(Dispatchers.IO) {
+        val items = history
+            .filter { it.status == "DONE" || it.status == "SENDING" }
+            .map { message ->
+                HistoryAttachmentPolicy.HistoryItem(
+                    role = message.role,
+                    content = message.content,
+                    attachments = AttachmentCodec.fromJson(message.attachmentsJson)
+                )
+            }
+
+        val prepared = HistoryAttachmentPolicy.prepare(items, supportsVision = supportsVision)
 
         val payloads = mutableListOf<MessagePayload>()
         if (systemPrompt.isNotBlank()) {
             payloads.add(MessagePayload(role = "system", content = systemPrompt))
         }
-        for (m in history) {
-            if (m.status == "DONE" || m.status == "SENDING") {
-                payloads.add(MessagePayload(role = m.role, content = m.content))
+        for (message in prepared) {
+            val images = mutableListOf<String>()
+            for (attachment in message.imageAttachments) {
+                ImageProcessor.process(File(attachment.path))
+                    .onSuccess { images.add(it.dataUri) }
             }
+            payloads.add(
+                MessagePayload(role = message.role, content = message.text, images = images)
+            )
         }
-        return openAiClient.streamChat(
-            baseUrl = normalized.baseUrl,
-            apiKey = normalized.apiKey,
-            model = normalized.model,
-            messages = payloads,
-            temperature = temperature
-        )
+        payloads
     }
 
-    // ---------------------------------------------------------------- enkripsi
-
-    /**
-     * Merapikan input, mengenkripsi key, dan menjaga key lama agar tidak hilang.
-     *
-     * Kasus penting: field key dikosongkan (mis. pengguna hanya mengganti nama model,
-     * atau dekripsi gagal sehingga field tampil kosong). Dalam kasus itu key terenkripsi
-     * yang sudah ada di database DIPERTAHANKAN, bukan ditimpa dengan string kosong.
-     */
-    private fun prepareForStorage(config: ApiConfigEntity, existing: ApiConfigEntity?): ApiConfigEntity {
-        val normalizedKey = ConfigNormalizer.normalizeApiKey(config.apiKey)
-        val existingStoredKey = existing?.apiKey.orEmpty()
-
-        val storedKey: String = when {
-            normalizedKey.isNotBlank() -> keyCipher.encrypt(normalizedKey)
-            existingStoredKey.isNotBlank() -> existingStoredKey
-            else -> ""
-        }
-
-        return config.copy(
-            baseUrl = ConfigNormalizer.normalizeBaseUrl(config.baseUrl),
-            apiKey = storedKey,
-            model = ConfigNormalizer.normalizeModelName(config.model).ifEmpty {
-                ConfigNormalizer.normalizeModelName(existing?.model).ifEmpty { "gpt-4o-mini" }
-            },
-            providerName = ConfigNormalizer.normalizeProfileName(config.providerName),
-            systemPrompt = config.systemPrompt.trim()
-        )
-    }
-
-    /**
-     * Mengubah baris database (key terenkripsi / teks biasa) menjadi konfigurasi siap pakai
-     * dengan key teks biasa. Sekaligus memperbarui [keyStatus] untuk kebutuhan UI.
-     */
-    private fun toPlainConfig(config: ApiConfigEntity): ApiConfigEntity {
-        val stored = config.apiKey
-
-        if (stored.isBlank()) {
-            _keyStatus.value = ApiKeyStatus.MISSING
-            return config
-        }
-
-        if (!KeyEnvelope.isEncrypted(stored)) {
-            // Data lama dari versi sebelumnya: masih teks biasa, tetap dipakai apa adanya.
-            _keyStatus.value = ApiKeyStatus.PLAINTEXT_LEGACY
-            return config.copy(apiKey = ConfigNormalizer.normalizeApiKey(stored))
-        }
-
-        val plainKey = keyCipher.decryptOrNull(stored)
-        return if (plainKey == null) {
-            // Dekripsi gagal: perlakukan key sebagai kosong dan minta pengguna mengisi ulang.
-            _keyStatus.value = ApiKeyStatus.UNDECRYPTABLE
-            config.copy(apiKey = "")
-        } else {
-            _keyStatus.value = ApiKeyStatus.OK
-            config.copy(apiKey = plainKey)
-        }
-    }
-
-    // Gemini Chat with system instruction
+    // Gemini Chat with system instruction (dipakai fitur Gemini langsung)
     suspend fun callGeminiChat(
         model: String,
         systemInstruction: String,
         history: List<ChatMessageEntity>,
         temperature: Float,
-        apiKey: String?
+        apiKey: String?,
+        supportsVision: Boolean = true
     ): Result<String> {
-        val payloads = history.map { MessagePayload(role = it.role, content = it.content) }
+        val payloads = buildPayloads(
+            history = history,
+            systemPrompt = "",
+            supportsVision = supportsVision
+        ).filter { it.role != "system" }
         return geminiClient.generateChat(
             model = model,
             systemInstruction = systemInstruction,
@@ -347,8 +595,53 @@ class ChatRepository(
         )
     }
 
+    // ---------------------------------------------------------------- internal
+
+    private fun prepareForStorage(config: ApiConfigEntity, existing: ApiConfigEntity?): ApiConfigEntity {
+        val normalizedKey = ConfigNormalizer.normalizeApiKey(config.apiKey)
+        val existingStoredKey = existing?.apiKey.orEmpty()
+
+        val storedKey: String = when {
+            normalizedKey.isNotBlank() -> keyCipher.encrypt(normalizedKey)
+            existingStoredKey.isNotBlank() -> existingStoredKey
+            else -> ""
+        }
+
+        return config.copy(
+            baseUrl = ConfigNormalizer.normalizeBaseUrl(config.baseUrl),
+            apiKey = storedKey,
+            model = ConfigNormalizer.normalizeModelName(config.model).ifEmpty {
+                ConfigNormalizer.normalizeModelName(existing?.model).ifEmpty { "gpt-4o-mini" }
+            },
+            providerName = ConfigNormalizer.normalizeProfileName(config.providerName),
+            systemPrompt = config.systemPrompt.trim()
+        )
+    }
+
+    private fun toPlainConfig(config: ApiConfigEntity): ApiConfigEntity {
+        val stored = config.apiKey
+
+        if (stored.isBlank()) {
+            _keyStatus.value = ApiKeyStatus.MISSING
+            return config
+        }
+
+        if (!KeyEnvelope.isEncrypted(stored)) {
+            _keyStatus.value = ApiKeyStatus.PLAINTEXT_LEGACY
+            return config.copy(apiKey = ConfigNormalizer.normalizeApiKey(stored))
+        }
+
+        val plainKey = keyCipher.decryptOrNull(stored)
+        return if (plainKey == null) {
+            _keyStatus.value = ApiKeyStatus.UNDECRYPTABLE
+            config.copy(apiKey = "")
+        } else {
+            _keyStatus.value = ApiKeyStatus.OK
+            config.copy(apiKey = plainKey)
+        }
+    }
+
     companion object {
-        /** Id profil bawaan lama; tetap didukung agar data pengguna tidak hilang. */
         const val DEFAULT_CONFIG_ID: String = "default_config"
     }
 }
