@@ -180,18 +180,39 @@ class ChatRepository(
     }
 
     /** Menyimpan lampiran ZIP yang sudah dirakit menjadi teks (tanpa URI asal). */
-    suspend fun storeZipBundle(textContent: String, displayName: String, sizeBytes: Long): Attachment? {
+    suspend fun storeZipBundle(textContent: String, displayName: String, sizeBytes: Long): Attachment? =
+        storeBundle(
+            kind = AttachmentKind.ZIP_BUNDLE,
+            textContent = textContent,
+            displayName = displayName,
+            mime = "application/zip",
+            sourceLabel = null,
+            sizeBytes = sizeBytes
+        )
+
+    /**
+     * Menyimpan bundel teks dari sumber mana pun (ZIP, GitHub, folder lokal) dan halaman web.
+     * [sourceLabel] hanya dipakai untuk tampilan chip, tidak pernah memuat token.
+     */
+    suspend fun storeBundle(
+        kind: AttachmentKind,
+        textContent: String,
+        displayName: String,
+        mime: String,
+        sourceLabel: String?,
+        sizeBytes: Long
+    ): Attachment? {
         val store = attachmentStore ?: return null
         val uri = writeTempFile(textContent, displayName) ?: return null
         val result = store.copyFromUri(
             uri = uri,
-            kind = AttachmentKind.ZIP_BUNDLE,
+            kind = kind,
             displayName = displayName,
-            mime = "application/zip",
+            mime = mime,
             textContent = textContent
         )
         runCatching { File(uri.path.orEmpty()).delete() }
-        return result.getOrNull()?.copy(sizeBytes = sizeBytes)
+        return result.getOrNull()?.copy(sizeBytes = sizeBytes, sourceLabel = sourceLabel)
     }
 
     /** Menulis berkas sementara di cache untuk dipakai copyFromUri. */

@@ -16,9 +16,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,6 +48,9 @@ private fun attachmentIcon(kind: AttachmentKind) = when (kind) {
     AttachmentKind.IMAGE -> Icons.Default.Image
     AttachmentKind.TEXT -> Icons.Default.Description
     AttachmentKind.ZIP_BUNDLE -> Icons.Default.Inventory2
+    AttachmentKind.GITHUB_BUNDLE -> Icons.Default.Cloud
+    AttachmentKind.FOLDER_BUNDLE -> Icons.Default.Folder
+    AttachmentKind.WEB_PAGE -> Icons.Default.Language
 }
 
 /**
@@ -98,8 +104,9 @@ fun PendingAttachmentRow(
                     Spacer(modifier = Modifier.width(6.dp))
 
                     Column(modifier = Modifier.width(120.dp)) {
+                        // Chip memakai sourceLabel bila ada (mis. "owner/repo @main" atau nama folder).
                         Text(
-                            text = attachment.name,
+                            text = attachment.sourceLabel ?: attachment.name,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,

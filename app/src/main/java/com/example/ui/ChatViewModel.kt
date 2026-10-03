@@ -1,5 +1,7 @@
 package com.example.ui
 
+import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.util.Base64
 import androidx.lifecycle.ViewModel
@@ -8,8 +10,24 @@ import androidx.lifecycle.viewModelScope
 import android.net.Uri
 import com.example.data.attachment.AttachmentImporter
 import com.example.data.attachment.AttachmentLimits
-import com.example.data.attachment.ZipScanResult
-import com.example.data.attachment.ZipTreeBuilder
+import com.example.data.attachment.BundleTextBuilder
+import com.example.data.attachment.FileTreeBuilder
+import com.example.data.attachment.LocalFolderTreeSource
+import com.example.data.attachment.TreeNode
+import com.example.data.attachment.TreeResult
+import com.example.data.attachment.TreeSource
+import com.example.data.attachment.ZipTreeSource
+import com.example.data.connector.ConnectorPrefs
+import com.example.data.connector.GitHubTreeSource
+import com.example.data.connector.SavedFolder
+import com.example.data.remote.GitHubClient
+import com.example.data.remote.GitHubFailure
+import com.example.data.remote.GitHubRepoSummary
+import com.example.data.remote.GitHubInputParser
+import com.example.data.remote.RateLimitHint
+import com.example.data.remote.RepoRef
+import com.example.data.web.WebPage
+import com.example.data.web.WebPageFetcher
 import com.example.data.local.entity.ApiConfigEntity
 import com.example.data.local.entity.ChatMessageEntity
 import com.example.data.local.entity.ChatSessionEntity
@@ -21,6 +39,7 @@ import com.example.data.repository.ChatRepository
 import com.example.data.repository.FallbackResult
 import com.example.data.security.ApiKeyStatus
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -31,6 +50,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
@@ -50,18 +70,105 @@ sealed interface ModelListState {
     data class Failed(val message: String) : ModelListState
 }
 
-/** Status pemilih isi ZIP (pohon berkas dengan centang). */
-sealed interface ZipPickerState {
-    data object Scanning : ZipPickerState
-    data class Ready(
-        val attachment: Attachment,
-        val scan: ZipScanResult
-    ) : ZipPickerState
+/** Status konektor untuk layar "Konektor". */
+data class ConnectorUiState(
+    val gitHubConnected: Boolean = false,
+    val gitHubLogin: String? = null,
+    val folders: List<SavedFolder> = emptyList(),
+    val busy: Boolean = false,
+    val message: String? = null,
+    val tokenError: String? = null
+)
+
+/** Langkah alur pemilihan sumber GitHub (repo -> branch -> pohon berkas). */
+sealed interface GitHubFlowState {
+    data object Hidden : GitHubFlowState
+
+    data class Repos(
+        val loading: Boolean,
+        val query: String = "",
+        val items: List<GitHubRepoSummary> = emptyList(),
+        val error: String? = null,
+        val hint: String? = null
+    ) : GitHubFlowState
+
+    data class Branches(
+        val repo: RepoRef,
+        val loading: Boolean,
+        val branches: List<String> = emptyList(),
+        val defaultBranch: String? = null,
+        val error: String? = null
+    ) : GitHubFlowState
+
+    data class Downloading(val repo: RepoRef, val branch: String) : GitHubFlowState
 }
 
+/**
+ * Pemilih isi untuk sumber mana pun (ZIP, GitHub, folder lokal).
+ * [defaultSelected] mengikuti aturan yang sama untuk semua sumber (anggaran token).
+ */
+data class TreeSheetState(
+    val title: String,
+    val subtitle: String,
+    val source: TreeSource,
+    val result: TreeResult?,
+    val defaultSelected: Set<String>,
+    val kind: AttachmentKind,
+    val displayName: String,
+    val mime: String,
+    val sourceLabel: String?,
+    val sizeBytes: Long,
+    val loading: Boolean = false,
+    val busy: Boolean = false,
+    val busyText: String? = null,
+    val error: String? = null,
+    /** Catatan pemindaian (mis. berkas dilewati, pohon terpotong). */
+    val notes: List<String> = emptyList(),
+    /** Lampiran arsip sementara (ZIP) yang dibuang setelah bundel disimpan/dibatalkan. */
+    val tempAttachment: Attachment? = null,
+    /** Berkas sementara (zipball GitHub) yang dibuang setelah selesai. */
+    val tempFile: File? = null
+)
+
+/** Dialog pratinjau tautan web. */
+data class WebDialogState(
+    val url: String = "",
+    val loading: Boolean = false,
+    val preview: WebPage? = null,
+    val error: String? = null
+)
+
 class ChatViewModel(
-    private val repository: ChatRepository
+    private val repository: ChatRepository,
+    private val appContext: Context
 ) : ViewModel() {
+
+    private val connectorPrefs: ConnectorPrefs = ConnectorPrefs(appContext)
+    private val gitHubClient: GitHubClient by lazy { GitHubClient() }
+    private val webPageFetcher: WebPageFetcher by lazy { WebPageFetcher() }
+
+    /** Status konektor (login GitHub + folder tersimpan). */
+    private val _connectorState = MutableStateFlow(ConnectorUiState())
+    val connectorState: StateFlow<ConnectorUiState> = _connectorState.asStateFlow()
+
+    /** True bila layar Konektor sedang ditampilkan. */
+    private val _showConnectors = MutableStateFlow(false)
+    val showConnectors: StateFlow<Boolean> = _showConnectors.asStateFlow()
+
+    /** Alur GitHub (repo -> branch). */
+    private val _gitHubFlow = MutableStateFlow<GitHubFlowState>(GitHubFlowState.Hidden)
+    val gitHubFlow: StateFlow<GitHubFlowState> = _gitHubFlow.asStateFlow()
+
+    /** Pemilih isi berkas dari sumber mana pun. */
+    private val _treeSheet = MutableStateFlow<TreeSheetState?>(null)
+    val treeSheet: StateFlow<TreeSheetState?> = _treeSheet.asStateFlow()
+
+    /** Dialog tautan web. */
+    private val _webDialog = MutableStateFlow<WebDialogState?>(null)
+    val webDialog: StateFlow<WebDialogState?> = _webDialog.asStateFlow()
+
+    private var connectorJob: Job? = null
+    private var treeJob: Job? = null
 
     val sessions: StateFlow<List<ChatSessionEntity>> = repository.allSessions
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -87,9 +194,6 @@ class ChatViewModel(
     /** Pesan error singkat saat menambahkan lampiran (mis. PDF belum didukung). */
     private val _attachmentNotice = MutableStateFlow<String?>(null)
     val attachmentNotice: StateFlow<String?> = _attachmentNotice.asStateFlow()
-
-    private val _zipPickerState = MutableStateFlow<ZipPickerState?>(null)
-    val zipPickerState: StateFlow<ZipPickerState?> = _zipPickerState.asStateFlow()
 
     private val _currentSessionId = MutableStateFlow<String?>(null)
     val currentSessionId: StateFlow<String?> = _currentSessionId.asStateFlow()
@@ -400,65 +504,543 @@ class ChatViewModel(
         }
     }
 
-    /** Memulai impor ZIP: salin -> pindai -> tampilkan pemilih isi (tanpa ekstrak ke disk). */
-    fun startZipImport(uris: List<Uri>) {
-        val uri = uris.firstOrNull() ?: return
-        viewModelScope.launch {
-            _zipPickerState.value = ZipPickerState.Scanning
-            when (val outcome = repository.importZip(uri)) {
-                is AttachmentImporter.Outcome.Rejected -> {
-                    _zipPickerState.value = null
-                    _attachmentNotice.value = outcome.message
+    // ==================================================================
+    //  PEMILIH ISI BERKAS DARI SUMBER MANA PUN (ZIP / GitHub / folder)
+    // ==================================================================
+
+    /** Permintaan membuka pemilih isi berkas. */
+    private class TreeRequest(
+        val title: String,
+        val subtitle: String,
+        val source: TreeSource,
+        val kind: AttachmentKind,
+        val displayName: String,
+        val mime: String,
+        val sourceLabel: String?,
+        val sizeBytes: Long,
+        val tempAttachment: Attachment? = null,
+        val tempFile: File? = null
+    )
+
+    /**
+     * Memuat pohon dari sebuah sumber lalu menampilkan pemilih isi.
+     * Batas (skip-list, anggaran 100K token, cap 400K karakter) berlaku sama untuk semua sumber.
+     */
+    private fun startTreeSheet(request: TreeRequest) {
+        treeJob?.cancel()
+        val initial = TreeSheetState(
+            title = request.title,
+            subtitle = request.subtitle,
+            source = request.source,
+            result = null,
+            defaultSelected = emptySet(),
+            kind = request.kind,
+            displayName = request.displayName,
+            mime = request.mime,
+            sourceLabel = request.sourceLabel,
+            sizeBytes = request.sizeBytes,
+            loading = true,
+            tempAttachment = request.tempAttachment,
+            tempFile = request.tempFile
+        )
+        _treeSheet.value = initial
+        treeJob = viewModelScope.launch {
+            val result = try {
+                request.source.list()
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                TreeResult.Failed(messageFor(t))
+            }
+            when (result) {
+                is TreeResult.Failed -> {
+                    discardTreeSheet(initial)
+                    _attachmentNotice.value = result.message
                 }
 
-                is AttachmentImporter.Outcome.Imported -> {
-                    val attachment = outcome.attachment
-                    val scan = repository.scanZip(attachment)
-                    if (scan.abortReason != null) {
-                        repository.deleteAttachment(attachment)
-                        _zipPickerState.value = null
-                        _attachmentNotice.value = scan.abortReason
-                    } else if (scan.entries.none { it.isText && it.skipReason == null }) {
-                        repository.deleteAttachment(attachment)
-                        _zipPickerState.value = null
-                        _attachmentNotice.value = "Tidak ada berkas teks yang bisa dibaca di dalam ZIP."
+                is TreeResult.Truncated -> {
+                    _treeSheet.value = initial.copy(
+                        result = result,
+                        loading = false,
+                        notes = listOf(result.warning),
+                        defaultSelected = request.source.defaultSelection(result.nodes, result)
+                    )
+                }
+
+                is TreeResult.Ready -> {
+                    if (result.nodes.none { it.readable }) {
+                        discardTreeSheet(initial)
+                        _attachmentNotice.value =
+                            "Tidak ada berkas teks yang bisa dibaca di sumber ini."
                     } else {
-                        _zipPickerState.value = ZipPickerState.Ready(attachment, scan)
+                        _treeSheet.value = initial.copy(
+                            result = result,
+                            loading = false,
+                            notes = result.warnings,
+                            defaultSelected = request.source.defaultSelection(result.nodes, result)
+                        )
                     }
                 }
             }
         }
     }
 
-    /** Menyimpan pilihan dari pemilih isi ZIP menjadi satu lampiran ZIP_BUNDLE. */
-    fun confirmZipSelection(selectedPaths: Set<String>) {
-        val state = _zipPickerState.value
-        if (state !is ZipPickerState.Ready) return
-        viewModelScope.launch {
-            val selected = ZipTreeBuilder.selectedEntries(state.scan.entries, selectedPaths)
-            if (selected.isEmpty()) {
-                repository.deleteAttachment(state.attachment)
-                _zipPickerState.value = null
-                _attachmentNotice.value = "Tidak ada berkas teks yang dipilih dari ZIP."
-                return@launch
+    /** Menutup pemilih isi dan membuang berkas sementaranya. */
+    private fun discardTreeSheet(state: TreeSheetState?) {
+        _treeSheet.value = null
+        val attachment = state?.tempAttachment
+        val file = state?.tempFile
+        if (attachment != null) viewModelScope.launch { repository.deleteAttachment(attachment) }
+        if (file != null) viewModelScope.launch { withContext(Dispatchers.IO) { file.delete() } }
+    }
+
+    /** Memuat ulang isi satu folder (dipakai ketika pohon GitHub terpotong). */
+    fun expandTreeFolder(path: String) {
+        val state = _treeSheet.value ?: return
+        treeJob?.cancel()
+        _treeSheet.value = state.copy(loading = true, error = null)
+        treeJob = viewModelScope.launch {
+            val result = try {
+                state.source.listChildren(path)
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                TreeResult.Failed(messageFor(t))
             }
-            val finalized = repository.finalizeZipAttachment(
-                attachment = state.attachment,
-                tree = state.scan.treeText,
-                selected = selected
-            )
-            addPendingAttachments(listOf(finalized))
-            _zipPickerState.value = null
+            val current = _treeSheet.value ?: return@launch
+            when (result) {
+                is TreeResult.Failed -> _treeSheet.value =
+                    current.copy(loading = false, error = result.message)
+
+                is TreeResult.Truncated -> _treeSheet.value = current.copy(
+                    result = result,
+                    loading = false,
+                    notes = listOf(result.warning),
+                    defaultSelected = current.defaultSelected + state.source.defaultSelection(result.nodes, result)
+                )
+
+                is TreeResult.Ready -> _treeSheet.value = current.copy(
+                    result = result,
+                    loading = false,
+                    notes = result.warnings,
+                    defaultSelected = current.defaultSelected + state.source.defaultSelection(result.nodes, result)
+                )
+            }
         }
     }
 
-    /** Membatalkan pemilih ZIP dan membuang berkas salinannya. */
-    fun cancelZipImport() {
-        val state = _zipPickerState.value
-        _zipPickerState.value = null
-        if (state is ZipPickerState.Ready) {
-            viewModelScope.launch { repository.deleteAttachment(state.attachment) }
+    /** Menyimpan pilihan dari pemilih isi menjadi satu lampiran bundel teks. */
+    fun confirmTreeSelection(selectedPaths: Set<String>) {
+        val state = _treeSheet.value ?: return
+        val result = state.result ?: return
+        if (state.busy) return
+        val nodes = FileTreeBuilder.selectedNodes(result.nodes, selectedPaths)
+        if (nodes.isEmpty()) {
+            _attachmentNotice.value = "Tidak ada berkas teks yang dipilih."
+            return
         }
+        _treeSheet.value = state.copy(busy = true, busyText = "Membaca berkas 0/${nodes.size}…", error = null)
+        treeJob = viewModelScope.launch {
+            try {
+                val files = state.source.readMany(nodes, AttachmentLimits.ZIP_MAX_ENTRY_READ_BYTES) { done, total ->
+                    _treeSheet.value = _treeSheet.value?.copy(busyText = "Membaca berkas $done/$total…")
+                }
+                if (files.isEmpty()) {
+                    _treeSheet.value = _treeSheet.value?.copy(busy = false, busyText = null, error = "Berkas yang dipilih tidak bisa dibaca.")
+                    return@launch
+                }
+                val tree = state.source.treeTextFor(result)
+                val text = BundleTextBuilder.build(state.source.treeHeader, tree, files)
+                if (text.length > AttachmentLimits.MAX_TEXT_CHARS_PER_MESSAGE) {
+                    _treeSheet.value = _treeSheet.value?.copy(
+                        busy = false, busyText = null,
+                        error = "Pilihan terlalu besar (" + (text.length / 4) + " perkiraan token). Kurangi berkas."
+                    )
+                    return@launch
+                }
+                val saved = repository.storeBundle(
+                    kind = state.kind,
+                    textContent = text,
+                    displayName = state.displayName,
+                    mime = state.mime,
+                    sourceLabel = state.sourceLabel,
+                    sizeBytes = state.sizeBytes
+                )
+                if (saved == null) {
+                    _treeSheet.value = _treeSheet.value?.copy(busy = false, busyText = null, error = "Bundel gagal disimpan.")
+                    return@launch
+                }
+                addPendingAttachments(listOf(saved))
+                discardTreeSheet(state)
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                _treeSheet.value = _treeSheet.value?.copy(busy = false, busyText = null, error = messageFor(t))
+            }
+        }
+    }
+
+    /** Membatalkan pemilih isi dan membuang berkas sementara. */
+    fun cancelTreeSelection() {
+        treeJob?.cancel()
+        discardTreeSheet(_treeSheet.value)
+    }
+
+    /** Impor ZIP: salin -> pindai -> pemilih isi (perilaku Tahap 2 dipertahankan). */
+    fun startZipImport(uris: List<Uri>) {
+        val uri = uris.firstOrNull() ?: return
+        viewModelScope.launch {
+            when (val outcome = repository.importZip(uri)) {
+                is AttachmentImporter.Outcome.Rejected -> _attachmentNotice.value = outcome.message
+                is AttachmentImporter.Outcome.Imported -> {
+                    val attachment = outcome.attachment
+                    startTreeSheet(
+                        TreeRequest(
+                            title = "Isi ZIP",
+                            subtitle = attachment.name,
+                            source = ZipTreeSource(File(attachment.path), attachment.name),
+                            kind = AttachmentKind.ZIP_BUNDLE,
+                            displayName = attachment.name,
+                            mime = "application/zip",
+                            sourceLabel = null,
+                            sizeBytes = attachment.sizeBytes,
+                            tempAttachment = attachment
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    // ==================================================================
+    //  GITHUB (repo -> branch -> pohon berkas)
+    // ==================================================================
+
+    /** Membuka alur GitHub: daftar repo (pencarian) atau input owner/repo. */
+    fun openGitHubFlow(query: String = "") {
+        _gitHubFlow.value = GitHubFlowState.Repos(loading = true, query = query)
+        loadReposPage(page = 1, query = query)
+    }
+
+    fun updateGitHubQuery(query: String) {
+        val current = _gitHubFlow.value as? GitHubFlowState.Repos ?: return
+        _gitHubFlow.value = current.copy(query = query)
+    }
+
+    fun loadReposPage(page: Int = 1, query: String? = null) {
+        val current = _gitHubFlow.value as? GitHubFlowState.Repos ?: return
+        val search = query ?: current.query
+        _gitHubFlow.value = current.copy(loading = true, error = null)
+        connectorJob = viewModelScope.launch {
+            val token = withContext(Dispatchers.IO) { connectorPrefs.gitHubToken() }
+            val result = gitHubClient.listRepos(token, page)
+            result.fold(
+                onSuccess = { repoPage ->
+                    val items = repoPage.items.filter {
+                        search.isBlank() || it.fullName.contains(search, ignoreCase = true)
+                    }
+                    _gitHubFlow.value = GitHubFlowState.Repos(
+                        loading = false,
+                        query = current.query,
+                        items = if (page == 1) items else current.items + items,
+                        error = null,
+                        hint = RateLimitHint.format(repoPage.rateLimit)
+                            ?: if (token == null) AttachmentLimits.GITHUB_UNAUTHENTICATED_HINT else null
+                    )
+                },
+                onFailure = { error ->
+                    _gitHubFlow.value = current.copy(loading = false, error = messageFor(error))
+                }
+            )
+        }
+    }
+
+    /** Menerima input bebas: URL repo, owner/repo, atau owner/repo/tree/branch. */
+    fun openRepoFromInput(text: String) {
+        GitHubInputParser.parseRepo(text).fold(
+            onSuccess = { ref -> openRepo(ref) },
+            onFailure = { error ->
+                val current = _gitHubFlow.value
+                if (current is GitHubFlowState.Repos) {
+                    _gitHubFlow.value = current.copy(error = messageFor(error))
+                } else {
+                    _attachmentNotice.value = messageFor(error)
+                }
+            }
+        )
+    }
+
+    /** Memuat daftar branch untuk repo terpilih. */
+    fun openRepo(ref: RepoRef) {
+        _gitHubFlow.value = GitHubFlowState.Branches(repo = ref, loading = true)
+        connectorJob = viewModelScope.launch {
+            val token = withContext(Dispatchers.IO) { connectorPrefs.gitHubToken() }
+            val info = gitHubClient.repoInfo(ref.owner, ref.repo, token)
+            val branchesResult = gitHubClient.listBranches(ref.owner, ref.repo, token)
+            val infoValue = info.getOrNull()
+            val branches = branchesResult.getOrElse { error ->
+                _gitHubFlow.value = GitHubFlowState.Branches(
+                    repo = ref, loading = false, error = messageFor(error)
+                )
+                return@launch
+            }
+            val defaultBranch = ref.ref ?: infoValue?.defaultBranch ?: branches.firstOrNull()
+            _gitHubFlow.value = GitHubFlowState.Branches(
+                repo = ref,
+                loading = false,
+                branches = branches,
+                defaultBranch = defaultBranch,
+                error = info.exceptionOrNull()?.let { messageFor(it) }
+            )
+        }
+    }
+
+    /** Membuka pohon berkas repo pada satu branch, atau mengunduh zipball-nya. */
+    fun openRepoBranch(ref: RepoRef, branch: String) {
+        _gitHubFlow.value = GitHubFlowState.Hidden
+        connectorJob = viewModelScope.launch {
+            val token = withContext(Dispatchers.IO) { connectorPrefs.gitHubToken() }
+            val label = ref.owner + "/" + ref.repo + " @" + branch
+            startTreeSheet(
+                TreeRequest(
+                    title = "Isi repo",
+                    subtitle = label,
+                    source = GitHubTreeSource(gitHubClient, ref, branch, token, label),
+                    kind = AttachmentKind.GITHUB_BUNDLE,
+                    displayName = (ref.owner + "-" + ref.repo + "-" + branch).replace('/', '-') + ".txt",
+                    mime = "text/markdown",
+                    sourceLabel = label,
+                    sizeBytes = 0L
+                )
+            )
+        }
+    }
+
+    /** Mengunduh zipball (maks 50 MB) lalu memilih isinya seperti ZIP biasa. */
+    fun downloadRepoZip(ref: RepoRef, branch: String) {
+        _gitHubFlow.value = GitHubFlowState.Downloading(ref, branch)
+        connectorJob = viewModelScope.launch {
+            val token = withContext(Dispatchers.IO) { connectorPrefs.gitHubToken() }
+            val label = ref.owner + "/" + ref.repo + " @" + branch
+            val target = withContext(Dispatchers.IO) {
+                try {
+                    File.createTempFile("zipball_", ".zip", appContext.cacheDir)
+                } catch (t: Throwable) {
+                    null
+                }
+            }
+            if (target == null) {
+                _gitHubFlow.value = GitHubFlowState.Hidden
+                _attachmentNotice.value = "Tidak bisa menyiapkan berkas sementara."
+                return@launch
+            }
+            val result = gitHubClient.downloadZipball(ref.owner, ref.repo, branch, token, target)
+            result.fold(
+                onSuccess = {
+                    _gitHubFlow.value = GitHubFlowState.Hidden
+                    startTreeSheet(
+                        TreeRequest(
+                            title = "Isi ZIP repo",
+                            subtitle = label,
+                            source = ZipTreeSource(
+                                archive = target,
+                                label = label,
+                                stripTopLevel = true,
+                                bundleKind = AttachmentKind.GITHUB_BUNDLE
+                            ),
+                            kind = AttachmentKind.GITHUB_BUNDLE,
+                            displayName = (ref.owner + "-" + ref.repo + "-" + branch).replace('/', '-') + ".txt",
+                            mime = "text/markdown",
+                            sourceLabel = label,
+                            sizeBytes = target.length(),
+                            tempFile = target
+                        )
+                    )
+                },
+                onFailure = { error ->
+                    withContext(Dispatchers.IO) { target.delete() }
+                    _gitHubFlow.value = GitHubFlowState.Hidden
+                    _attachmentNotice.value = messageFor(error)
+                }
+            )
+        }
+    }
+
+    fun cancelGitHubFlow() {
+        connectorJob?.cancel()
+        _gitHubFlow.value = GitHubFlowState.Hidden
+    }
+
+    // ==================================================================
+    //  FOLDER LOKAL (SAF)
+    // ==================================================================
+
+    /** Menyimpan folder yang baru diberi izin (dipanggil setelah OpenDocumentTree). */
+    fun addSavedFolder(uri: Uri, name: String? = null) {
+        val display = name?.takeIf { it.isNotBlank() } ?: uri.lastPathSegment ?: "Folder"
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                connectorPrefs.addFolder(SavedFolder(uri.toString(), display, System.currentTimeMillis()))
+            }
+            refreshConnectorState()
+        }
+    }
+
+    fun removeSavedFolder(uri: Uri) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { connectorPrefs.removeFolder(uri.toString()) }
+            refreshConnectorState()
+        }
+    }
+
+    /** Membuka pohon berkas sebuah folder tersimpan. */
+    fun openSavedFolder(folder: SavedFolder) {
+        val uri = Uri.parse(folder.uri)
+        _showConnectors.value = false
+        startTreeSheet(
+            TreeRequest(
+                title = "Isi folder",
+                subtitle = folder.name,
+                source = LocalFolderTreeSource(appContext, uri, folder.name),
+                kind = AttachmentKind.FOLDER_BUNDLE,
+                displayName = folder.name + ".txt",
+                mime = "text/markdown",
+                sourceLabel = folder.name,
+                sizeBytes = 0L
+            )
+        )
+    }
+
+    // ==================================================================
+    //  TAUTAN WEB
+    // ==================================================================
+
+    fun openWebDialog() {
+        _webDialog.value = WebDialogState()
+    }
+
+    fun updateWebUrl(url: String) {
+        _webDialog.value = _webDialog.value?.copy(url = url, error = null) ?: WebDialogState(url = url)
+    }
+
+    /** Mengambil pratinjau halaman (judul + potongan teks) sebelum dilampirkan. */
+    fun previewWebPage() {
+        val state = _webDialog.value ?: return
+        if (state.loading) return
+        _webDialog.value = state.copy(loading = true, error = null, preview = null)
+        connectorJob = viewModelScope.launch {
+            val result = webPageFetcher.fetch(state.url)
+            val current = _webDialog.value ?: return@launch
+            result.fold(
+                onSuccess = { page -> _webDialog.value = current.copy(loading = false, preview = page) },
+                onFailure = { error -> _webDialog.value = current.copy(loading = false, error = messageFor(error)) }
+            )
+        }
+    }
+
+    /** Melampirkan halaman yang sudah dipratinjau sebagai lampiran WEB_PAGE. */
+    fun attachPreviewedWebPage() {
+        val state = _webDialog.value ?: return
+        val page = state.preview ?: return
+        if (state.loading) return
+        _webDialog.value = state.copy(loading = true, error = null)
+        viewModelScope.launch {
+            val body = "### Halaman web: " + page.title + " (" + page.url + ")\n\n" + page.text
+            val saved = repository.storeBundle(
+                kind = AttachmentKind.WEB_PAGE,
+                textContent = body,
+                displayName = page.title.take(60) + ".md",
+                mime = "text/markdown",
+                sourceLabel = page.title,
+                sizeBytes = body.length.toLong()
+            )
+            if (saved == null) {
+                _webDialog.value = _webDialog.value?.copy(loading = false, error = "Halaman gagal disimpan.")
+                return@launch
+            }
+            addPendingAttachments(listOf(saved))
+            _webDialog.value = null
+        }
+    }
+
+    fun closeWebDialog() {
+        connectorJob?.cancel()
+        _webDialog.value = null
+    }
+
+    /** Pesan kesalahan yang ramah untuk semua kegagalan sumber. */
+    private fun messageFor(error: Throwable): String = when (error) {
+        is GitHubFailure -> error.message?.takeIf { it.isNotBlank() } ?: "Permintaan GitHub gagal."
+        else -> error.message?.takeIf { it.isNotBlank() } ?: "Terjadi kesalahan."
+    }
+
+    // ==================================================================
+    //  LAYAR KONEKTOR
+    // ==================================================================
+
+    fun openConnectors() {
+        _showConnectors.value = true
+        viewModelScope.launch { refreshConnectorState() }
+    }
+
+    fun closeConnectors() {
+        _showConnectors.value = false
+    }
+
+    suspend fun refreshConnectorState() {
+        val state = withContext(Dispatchers.IO) {
+            ConnectorUiState(
+                gitHubConnected = connectorPrefs.isGitHubConnected(),
+                gitHubLogin = connectorPrefs.gitHubLogin(),
+                folders = connectorPrefs.savedFolders(),
+                busy = false,
+                message = null,
+                tokenError = null
+            )
+        }
+        _connectorState.value = state
+    }
+
+    /** Memvalidasi token lewat GET /user lalu menyimpannya terenkripsi. */
+    fun connectGitHub(token: String) {
+        val trimmed = token.trim()
+        if (trimmed.isEmpty()) {
+            _connectorState.value = _connectorState.value.copy(tokenError = "Token masih kosong.")
+            return
+        }
+        if (_connectorState.value.busy) return
+        _connectorState.value = _connectorState.value.copy(busy = true, tokenError = null, message = null)
+        connectorJob = viewModelScope.launch {
+            val result = gitHubClient.validateToken(trimmed)
+            result.fold(
+                onSuccess = { user ->
+                    withContext(Dispatchers.IO) { connectorPrefs.saveGitHubToken(trimmed, user.login) }
+                    refreshConnectorState()
+                    _connectorState.value = _connectorState.value.copy(
+                        message = "Terhubung sebagai @" + user.login
+                    )
+                },
+                onFailure = { error ->
+                    _connectorState.value = _connectorState.value.copy(
+                        busy = false,
+                        tokenError = messageFor(error)
+                    )
+                }
+            )
+        }
+    }
+
+    /** Menghapus token GitHub dari perangkat. */
+    fun disconnectGitHub() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { connectorPrefs.disconnectGitHub() }
+            refreshConnectorState()
+            _connectorState.value = _connectorState.value.copy(message = "Token GitHub dihapus.")
+        }
+    }
+
+    fun clearConnectorMessage() {
+        _connectorState.value = _connectorState.value.copy(message = null, tokenError = null)
     }
 
     fun clearAttachmentNotice() {
@@ -770,11 +1352,14 @@ class ChatViewModel(
     }
 }
 
-class ChatViewModelFactory(private val repository: ChatRepository) : ViewModelProvider.Factory {
+class ChatViewModelFactory(
+    private val repository: ChatRepository,
+    private val appContext: Context
+) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
-            return ChatViewModel(repository) as T
+            return ChatViewModel(repository, appContext.applicationContext) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

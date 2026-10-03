@@ -31,7 +31,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MyApplicationTheme {
                 val chatViewModel: ChatViewModel = viewModel(
-                    factory = ChatViewModelFactory(repository)
+                    factory = ChatViewModelFactory(repository, applicationContext)
                 )
 
                 Surface(modifier = Modifier.fillMaxSize()) {

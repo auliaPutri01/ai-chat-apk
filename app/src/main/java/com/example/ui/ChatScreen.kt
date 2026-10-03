@@ -2,6 +2,7 @@ package com.example.ui
 
 import androidx.activity.compose.BackHandler
 import android.widget.Toast
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,7 +37,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -63,14 +69,17 @@ import com.example.data.attachment.AttachmentLimits
 import com.example.ui.components.ApiConfigModal
 import com.example.ui.components.AttachmentPickerSheet
 import com.example.ui.components.ChatDrawerContent
-import com.example.ui.components.ZipContentSheet
+import com.example.ui.components.ConnectorScreen
+import com.example.ui.components.GitHubFlowSheet
+import com.example.ui.components.TreeContentSheet
+import com.example.ui.components.WebLinkDialog
 import com.example.ui.components.ChatInputBar
 import com.example.ui.components.ChatMessageItem
 import com.example.ui.components.ChatTopBar
 import com.example.ui.components.ExportArtifactDialog
 import com.example.ui.components.GeminiFeaturesModal
 import com.example.ui.components.ModelSelectorDialog
-import com.example.ui.ZipPickerState
+import com.example.data.connector.SavedFolder
 import com.example.ui.theme.GptEmerald
 import com.example.ui.theme.StatusWarning
 import kotlinx.coroutines.launch
@@ -92,9 +101,14 @@ fun ChatScreen(
     val context = LocalContext.current
     val pendingAttachments by viewModel.pendingAttachments.collectAsStateWithLifecycle()
     val attachmentNotice by viewModel.attachmentNotice.collectAsStateWithLifecycle()
-    val zipPickerState by viewModel.zipPickerState.collectAsStateWithLifecycle()
+    val treeSheetState by viewModel.treeSheet.collectAsStateWithLifecycle()
+    val gitHubFlow by viewModel.gitHubFlow.collectAsStateWithLifecycle()
+    val webDialog by viewModel.webDialog.collectAsStateWithLifecycle()
+    val connectorState by viewModel.connectorState.collectAsStateWithLifecycle()
+    val showConnectors by viewModel.showConnectors.collectAsStateWithLifecycle()
 
     var showAttachmentPicker by remember { mutableStateOf(false) }
+    var showFolderChooser by remember { mutableStateOf(false) }
 
     // Pemilih lampiran: galeri (multi), berkas (multi), dan ZIP (satu berkas).
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -110,6 +124,32 @@ fun ChatScreen(
     val zipPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let { viewModel.startZipImport(listOf(it)) } }
+
+    // Folder lokal: izin akses folder (SAF) disimpan permanen supaya bisa dipakai lagi.
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            val granted = runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }.isSuccess
+            if (granted) {
+                viewModel.addSavedFolder(
+                    uri,
+                    uri.lastPathSegment?.substringAfterLast(':') ?: uri.lastPathSegment
+                )
+            } else {
+                Toast.makeText(
+                    context,
+                    "Izin folder tidak bisa disimpan. Coba pilih folder lain.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
 
     // Pesan singkat lampiran (tidak pernah memuat API key).
     LaunchedEffect(attachmentNotice) {
@@ -146,6 +186,25 @@ fun ChatScreen(
     // Close drawer on system back press if open
     BackHandler(enabled = drawerState.isOpen) {
         scope.launch { drawerState.close() }
+    }
+
+    if (showConnectors) {
+        ConnectorScreen(
+            state = connectorState,
+            onBack = { viewModel.closeConnectors() },
+            onConnect = { token -> viewModel.connectGitHub(token) },
+            onDisconnect = { viewModel.disconnectGitHub() },
+            onAddFolder = { folderPickerLauncher.launch(null) },
+            onRemoveFolder = { folder ->
+                viewModel.removeSavedFolder(android.net.Uri.parse(folder.uri))
+            },
+            onOpenFolder = { folder ->
+                viewModel.closeConnectors()
+                viewModel.openSavedFolder(folder)
+            },
+            onClearMessage = { viewModel.clearConnectorMessage() }
+        )
+        return
     }
 
     ModalNavigationDrawer(
@@ -481,19 +540,127 @@ fun ChatScreen(
             },
             onPickZip = {
                 showAttachmentPicker = false
-                zipPickerLauncher.launch(arrayOf("*/*"))
+                zipPickerLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed"))
+            },
+            onPickGitHub = {
+                showAttachmentPicker = false
+                viewModel.openGitHubFlow()
+            },
+            onPickFolder = {
+                showAttachmentPicker = false
+                if (connectorState.folders.isEmpty()) {
+                    folderPickerLauncher.launch(null)
+                } else {
+                    showFolderChooser = true
+                }
+            },
+            onPickWeb = {
+                showAttachmentPicker = false
+                viewModel.openWebDialog()
             },
             onDismiss = { showAttachmentPicker = false }
         )
     }
 
-    // Bottom sheet isi ZIP: pohon berkas dengan centang + anggaran token
-    (zipPickerState as? ZipPickerState.Ready)?.let { state ->
-        ZipContentSheet(
-            scan = state.scan,
-            fileName = state.attachment.name,
-            onConfirm = { selected -> viewModel.confirmZipSelection(selected) },
-            onCancel = { viewModel.cancelZipImport() }
+    // Pemilih isi generik: dipakai ZIP, GitHub, dan folder lokal (batas sama untuk semua).
+    treeSheetState?.let { state ->
+        TreeContentSheet(
+            state = state,
+            onExpandFolder = { path -> viewModel.expandTreeFolder(path) },
+            onConfirm = { selected -> viewModel.confirmTreeSelection(selected) },
+            onCancel = { viewModel.cancelTreeSelection() }
         )
+    }
+
+    // Alur GitHub: repo -> branch -> (pilih berkas | unduh ZIP)
+    if (gitHubFlow !is GitHubFlowState.Hidden) {
+        GitHubFlowSheet(
+            state = gitHubFlow,
+            connectedLogin = connectorState.gitHubLogin,
+            onQueryChange = { query -> viewModel.updateGitHubQuery(query) },
+            onSubmitInput = { text -> viewModel.openRepoFromInput(text) },
+            onRefresh = { viewModel.loadReposPage(1) },
+            onPickRepo = { owner, repo ->
+                viewModel.openRepo(com.example.data.remote.RepoRef(owner, repo))
+            },
+            onPickBranch = { owner, repo, branch ->
+                viewModel.openRepoBranch(com.example.data.remote.RepoRef(owner, repo), branch)
+            },
+            onDownloadZip = { owner, repo, branch ->
+                viewModel.downloadRepoZip(com.example.data.remote.RepoRef(owner, repo), branch)
+            },
+            onBack = { viewModel.openGitHubFlow() },
+            onDismiss = { viewModel.cancelGitHubFlow() }
+        )
+    }
+
+    // Dialog tautan web: pratinjau lalu lampirkan
+    webDialog?.let { dialog ->
+        WebLinkDialog(
+            state = dialog,
+            onUrlChange = { url -> viewModel.updateWebUrl(url) },
+            onPreview = { viewModel.previewWebPage() },
+            onAttach = { viewModel.attachPreviewedWebPage() },
+            onDismiss = { viewModel.closeWebDialog() }
+        )
+    }
+
+    // Pemilih folder tersimpan
+    if (showFolderChooser) {
+        SavedFolderChooser(
+            folders = connectorState.folders,
+            onPick = { folder ->
+                showFolderChooser = false
+                viewModel.openSavedFolder(folder)
+            },
+            onAdd = {
+                showFolderChooser = false
+                folderPickerLauncher.launch(null)
+            },
+            onDismiss = { showFolderChooser = false }
+        )
+    }
+}
+
+/** Pemilih cepat folder yang sudah tersimpan. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SavedFolderChooser(
+    folders: List<SavedFolder>,
+    onPick: (SavedFolder) -> Unit,
+    onAdd: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        modifier = Modifier.testTag("saved_folder_sheet")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 26.dp)
+        ) {
+            Text(
+                text = "Pilih folder",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            folders.forEach { folder ->
+                TextButton(
+                    onClick = { onPick(folder) },
+                    modifier = Modifier.testTag("saved_folder_" + folder.name)
+                ) { Text(folder.name) }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            OutlinedButton(
+                onClick = onAdd,
+                modifier = Modifier.testTag("saved_folder_add")
+            ) { Text("Tambah folder lain") }
+        }
     }
 }

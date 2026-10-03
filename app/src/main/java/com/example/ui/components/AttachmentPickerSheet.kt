@@ -15,8 +15,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +47,9 @@ fun AttachmentPickerSheet(
     onPickImages: () -> Unit,
     onPickFiles: () -> Unit,
     onPickZip: () -> Unit,
+    onPickGitHub: () -> Unit,
+    onPickFolder: () -> Unit,
+    onPickWeb: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -95,6 +101,33 @@ fun AttachmentPickerSheet(
                 icon = { Icon(Icons.Default.Inventory2, contentDescription = null, tint = GptEmerald) },
                 testTag = "pick_zip_option",
                 onClick = onPickZip
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            PickerRow(
+                title = "Dari GitHub",
+                subtitle = "Repo, branch, lalu pilih berkas atau unduh sebagai ZIP",
+                icon = { Icon(Icons.Default.Cloud, contentDescription = null, tint = GptEmerald) },
+                testTag = "pick_github_option",
+                onClick = onPickGitHub
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            PickerRow(
+                title = "Dari folder",
+                subtitle = "Folder di perangkat (izin akses tersimpan)",
+                icon = { Icon(Icons.Default.Folder, contentDescription = null, tint = GptEmerald) },
+                testTag = "pick_folder_option",
+                onClick = onPickFolder
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            PickerRow(
+                title = "Dari tautan web",
+                subtitle = "Ambil isi halaman http/https sebagai teks",
+                icon = { Icon(Icons.Default.Language, contentDescription = null, tint = GptEmerald) },
+                testTag = "pick_web_option",
+                onClick = onPickWeb
             )
 
             Spacer(modifier = Modifier.height(14.dp))

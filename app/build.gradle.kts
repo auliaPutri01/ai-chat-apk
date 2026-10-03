@@ -74,6 +74,11 @@ android {
   testOptions {
     unitTests {
       isIncludeAndroidResources = true
+      // Heap test JVM dibatasi: sandbox build hanya punya ~2 GB, dan JVM Gradle juga jalan.
+      all {
+        it.maxHeapSize = "512m"
+        it.jvmArgs("-XX:MaxMetaspaceSize=256m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1")
+      }
     }
   }
 
@@ -128,6 +133,8 @@ dependencies {
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
   testImplementation(libs.junit)
+  // MockWebServer untuk unit test klien GitHub (versi sama dengan okhttp 4.10.0).
+  testImplementation(libs.okhttp.mockwebserver)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
   // org.json asli untuk unit test JVM murni: stub android.jar membuat seluruh method
