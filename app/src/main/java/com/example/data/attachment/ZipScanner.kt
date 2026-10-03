@@ -58,14 +58,11 @@ data class ZipScanResult(
 class ZipScanner {
 
     companion object {
-        /** Segmen path yang dilewati beserta alasannya. */
-        private val SKIPPED_DIRECTORIES: Map<String, String> = mapOf(
-            ".git" to "folder .git",
-            "node_modules" to "folder node_modules",
-            "build" to "folder build",
-            ".gradle" to "folder .gradle",
-            ".idea" to "folder .idea"
-        )
+        /** Segmen path yang dilewati (dipakai bersama semua sumber lewat [TreeRules]). */
+        private val SKIPPED_DIRECTORIES: Map<String, String> get() = TreeRules.SKIPPED_DIRECTORIES
+
+        /** Judul blok pohon untuk bundel ZIP (dipertahankan dari Tahap 2). */
+        const val TREE_HEADER: String = "### Pohon file ZIP"
     }
 
     /**
@@ -247,32 +244,11 @@ class ZipScanner {
         )
     }
 
-    /** Path absolut atau mengandung ".." -> tidak boleh dipakai. */
-    fun isUnsafePath(path: String): Boolean {
-        val normalized = path.replace('\\', '/')
-        if (normalized.isEmpty()) return true
-        if (normalized.startsWith("/")) return true
-        // Drive letter Windows, mis. C:/...
-        if (normalized.length >= 2 && normalized[1] == ':' &&
-            normalized[0].isLetter()
-        ) {
-            return true
-        }
-        return normalized.split('/').any { it == ".." }
-    }
+    /** Path absolut atau mengandung ".." -> tidak boleh dipakai (aturan bersama [TreeRules]). */
+    fun isUnsafePath(path: String): Boolean = TreeRules.isUnsafePath(path)
 
-    /** Alasan entri dilewati, atau null bila entri boleh dipertimbangkan. */
-    fun skipReasonFor(path: String): String? {
-        val lower = path.lowercase()
-        val segments = lower.split('/')
-        for (segment in segments) {
-            SKIPPED_DIRECTORIES[segment]?.let { return it }
-        }
-        val ext = TextFileRules.extensionOf(lower)
-        if (ext.isNotEmpty() && ext in TextFileRules.IMAGE_EXTENSIONS) return "gambar"
-        if (ext.isNotEmpty() && ext in TextFileRules.BINARY_EXTENSIONS) return "file biner"
-        return null
-    }
+    /** Alasan entri dilewati, atau null bila entri boleh dipertimbangkan (aturan bersama [TreeRules]). */
+    fun skipReasonFor(path: String): String? = TreeRules.skipReasonFor(path)
 
     /** Membaca paling banyak [maxBytes] dari stream (tidak mempercayai klaim ukuran entri). */
     private fun readBounded(input: InputStream, maxBytes: Int): ByteArray {
@@ -294,54 +270,30 @@ class ZipScanner {
         return out.toByteArray()
     }
 
-    /** Pohon file bergaya `tree` sederhana, diurutkan agar stabil. */
-    fun buildTree(paths: List<String>, maxLines: Int = 400): String {
-        if (paths.isEmpty()) return ""
-        val sorted = paths.filter { it.isNotBlank() }.distinct().sorted()
-        val builder = StringBuilder()
-        var lines = 0
-        for (path in sorted) {
-            if (lines >= maxLines) {
-                builder.append("... (pohon dipotong)\n")
-                break
-            }
-            val depth = path.count { it == '/' }
-            val name = path.substringAfterLast('/')
-            builder.append("  ".repeat(depth)).append(name).append('\n')
-            lines++
-        }
-        return builder.toString().trimEnd('\n')
-    }
+    /** Pohon file bergaya `tree` sederhana (aturan bersama [TreeTextBuilder]). */
+    fun buildTree(paths: List<String>, maxLines: Int = 400): String =
+        TreeTextBuilder.build(paths, maxLines)
 
     /**
      * Menyusun teks akhir untuk dikirim ke model dari entri yang dipilih pengguna.
      * Isi file dibungkus pagar backtick yang aman lewat [TextAttachmentFormatter].
+     *
+     * Perakitan diserahkan ke [BundleTextBuilder] supaya sumber lain (GitHub, folder lokal)
+     * memakai format yang sama persis; header ZIP dipertahankan seperti Tahap 2.
      */
     fun buildBundleText(
         tree: String,
         selected: List<ZipEntryInfo>,
         budgetChars: Int = AttachmentLimits.MAX_TEXT_CHARS_PER_MESSAGE
-    ): String {
-        val blocks = mutableListOf<String>()
-        blocks.add("### Pohon file ZIP\n" + TreeFence.wrap(tree))
-        for (entry in selected) {
-            val content = entry.textContent ?: continue
-            blocks.add(
-                TextAttachmentFormatter.formatFileBlock(
-                    fileName = entry.path,
-                    sizeBytes = entry.sizeBytes,
-                    content = content
-                )
-            )
-        }
-        return TextAttachmentFormatter.joinWithBudget(blocks, budgetChars)
-    }
+    ): String = BundleTextBuilder.build(
+        treeHeader = TREE_HEADER,
+        tree = tree,
+        files = selected.mapNotNull { entry ->
+            entry.textContent?.let { content ->
+                BundleFile(path = entry.path, sizeBytes = entry.sizeBytes, content = content)
+            }
+        },
+        budgetChars = budgetChars
+    )
 
-    /** Pembungkus kecil untuk blok pohon agar tidak bentrok dengan pagar kode lain. */
-    private object TreeFence {
-        fun wrap(tree: String): String {
-            val fence = TextAttachmentFormatter.fenceFor(tree)
-            return "$fence\n$tree\n$fence"
-        }
-    }
 }

@@ -1,10 +1,11 @@
 package com.example.data.attachment
 
 /**
- * Pohon file untuk pemilih isi ZIP di UI.
+ * Pohon berkas untuk pemilih isi ZIP.
  *
- * Fungsi murni: hanya menyusun struktur dari [ZipEntryInfo] yang sudah dipindai,
- * sehingga centang folder/file dan penghitungan token bisa diuji di JVM.
+ * Sejak TAHAP 3 algoritma pohon & pemilihan hidup di [FileTreeBuilder] supaya semua sumber
+ * (ZIP, GitHub, folder lokal) memakai aturan yang sama; kelas ini mempertahankan API lama
+ * beserta pengujiannya.
  */
 object ZipTreeBuilder {
 
@@ -30,44 +31,17 @@ object ZipTreeBuilder {
 
     /** Menyusun pohon dari daftar entri (file dan folder). */
     fun build(entries: List<ZipEntryInfo>): List<Node> {
-        val root = MutableNode("", "")
-
-        for (entry in entries) {
-            val segments = entry.path.split('/').filter { it.isNotBlank() }
-            if (segments.isEmpty()) continue
-
-            var current = root
-            for (index in segments.indices) {
-                val isLeaf = index == segments.size - 1
-                val segmentPath = segments.subList(0, index + 1).joinToString("/")
-                current = current.child(segmentPath, segments[index], isLeaf && !entry.isDirectory)
-                if (isLeaf) {
-                    current.entry = entry
-                }
-            }
-        }
-
-        return root.children.values.map { it.toImmutable() }.sortedWith(
-            compareByDescending<Node> { it.isDirectory }.thenBy { it.name.lowercase() }
-        )
+        val byPath = entries.associateBy { it.path }
+        return FileTreeBuilder.build(entries.map { it.toTreeNode() }).map { it.toZipNode(byPath) }
     }
 
-    private class MutableNode(val path: String, val name: String) {
-        val children = linkedMapOf<String, MutableNode>()
-        var entry: ZipEntryInfo? = null
-
-        fun child(path: String, name: String, isLeaf: Boolean): MutableNode =
-            children.getOrPut(path) { MutableNode(path, name) }
-
-        fun toImmutable(): Node = Node(
-            path = path,
-            name = name,
-            isDirectory = children.isNotEmpty(),
-            entry = entry,
-            children = children.values.map { it.toImmutable() }
-                .sortedWith(compareByDescending<Node> { it.isDirectory }.thenBy { it.name.lowercase() })
-        )
-    }
+    private fun FileTreeBuilder.Node.toZipNode(byPath: Map<String, ZipEntryInfo>): Node = Node(
+        path = path,
+        name = name,
+        isDirectory = isDirectory,
+        entry = byPath[path],
+        children = children.map { it.toZipNode(byPath) }
+    )
 
     /** Path file teks yang dicentang otomatis (sama dengan selectedByDefault pemindai). */
     fun defaultSelection(entries: List<ZipEntryInfo>): Set<String> =
@@ -114,3 +88,17 @@ object ZipTreeBuilder {
         return result
     }
 }
+
+/**
+ * Pemetaan entri ZIP ke [TreeNode] supaya aturan pemilihan & pemilih isi di UI dipakai
+ * bersama semua sumber tanpa mengubah aturan keamanan ZIP.
+ */
+fun ZipEntryInfo.toTreeNode(): TreeNode = TreeNode(
+    path = path,
+    isDir = isDirectory,
+    sizeBytes = sizeBytes,
+    ref = null,
+    skipReason = if (isText && skipReason == null) null else (skipReason ?: "bukan file teks"),
+    autoSelect = selectedByDefault,
+    textHint = textContent
+)
