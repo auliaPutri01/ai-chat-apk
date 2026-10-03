@@ -12,7 +12,16 @@ enum class AttachmentKind {
      * Arsip ZIP. Isinya TIDAK diekstrak ke disk; hanya dibaca dari file salinan lalu
      * diubah menjadi teks (pohon file + isi file teks terpilih).
      */
-    ZIP_BUNDLE
+    ZIP_BUNDLE,
+
+    /** Bundel berkas dari repositori GitHub (pohon berkas + isi berkas teks terpilih). */
+    GITHUB_BUNDLE,
+
+    /** Bundel berkas dari folder lokal yang dipilih lewat SAF. */
+    FOLDER_BUNDLE,
+
+    /** Satu halaman web yang diubah menjadi teks. */
+    WEB_PAGE
 }
 
 /**
@@ -31,7 +40,12 @@ data class Attachment(
     val mime: String,
     val sizeBytes: Long,
     val path: String,
-    val textContent: String? = null
+    val textContent: String? = null,
+    /**
+     * Label sumber untuk chip di UI, mis. "owner/repo @main, 12 berkas" atau
+     * "folder Documents". Null untuk lampiran dari picker biasa.
+     */
+    val sourceLabel: String? = null
 ) {
     /** Perkiraan kasar jumlah token: karakter / 4. */
     val estimatedTokens: Int

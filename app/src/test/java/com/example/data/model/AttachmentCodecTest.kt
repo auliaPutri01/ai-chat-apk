@@ -76,11 +76,44 @@ class AttachmentCodecTest {
     }
 
     @Test
-    fun `entri tanpa id atau jenis tidak dikenal dilewati`() {
-        val json = """[{"kind":"IMAGE","name":"x"},{"id":"a","kind":"TIDAK_ADA"},{"id":"b","kind":"TEXT","name":"ok","mime":"text/plain","sizeBytes":1,"path":"/p"}]"""
+    fun `entri tanpa id memakai id legacy dan jenis asing dibaca sebagai TEXT`() {
+        // Sejak TAHAP 3: parser toleran (data lama/asing tidak boleh hilang atau bikin crash).
+        val json = """[{"kind":"IMAGE","name":"x"},{"id":"a","kind":"TIDAK_ADA","name":"aneh"},{"id":"b","kind":"TEXT","name":"ok","mime":"text/plain","sizeBytes":1,"path":"/p"}]"""
         val decoded = AttachmentCodec.fromJson(json)
-        assertEquals(1, decoded.size)
-        assertEquals("b", decoded.first().id)
+        assertEquals(3, decoded.size)
+        assertEquals("legacy-0", decoded[0].id)
+        assertEquals(AttachmentKind.IMAGE, decoded[0].kind)
+        assertEquals(AttachmentKind.TEXT, decoded[1].kind)
+        assertEquals("a", decoded[1].id)
+        assertEquals("b", decoded.last().id)
+    }
+
+    @Test
+    fun `kind baru tahap 3 bolak-balik utuh termasuk sourceLabel`() {
+        val items = listOf(
+            Attachment(
+                id = "g", kind = AttachmentKind.GITHUB_BUNDLE, name = "repo.txt",
+                mime = "text/markdown", sizeBytes = 10, path = "/g",
+                textContent = "isi", sourceLabel = "owner/repo @main"
+            ),
+            Attachment(
+                id = "f", kind = AttachmentKind.FOLDER_BUNDLE, name = "folder.txt",
+                mime = "text/markdown", sizeBytes = 10, path = "/f",
+                textContent = "isi", sourceLabel = "Dokumen"
+            ),
+            Attachment(
+                id = "w", kind = AttachmentKind.WEB_PAGE, name = "halaman.md",
+                mime = "text/markdown", sizeBytes = 10, path = "/w",
+                textContent = "isi", sourceLabel = "Judul"
+            )
+        )
+        val decoded = AttachmentCodec.fromJson(AttachmentCodec.toJson(items))
+        assertEquals(3, decoded.size)
+        assertEquals(AttachmentKind.GITHUB_BUNDLE, decoded[0].kind)
+        assertEquals("owner/repo @main", decoded[0].sourceLabel)
+        assertEquals(AttachmentKind.FOLDER_BUNDLE, decoded[1].kind)
+        assertEquals(AttachmentKind.WEB_PAGE, decoded[2].kind)
+        assertEquals("Judul", decoded[2].sourceLabel)
     }
 
     @Test

@@ -54,6 +54,46 @@ object AttachmentLimits {
     /** Penanda saat isi dipotong. */
     const val TRUNCATION_MARKER: String = "[dipotong]"
 
+    // ---- Tautan web (TAHAP 3) ----
+    /** Maksimal byte halaman web yang diunduh. */
+    const val WEB_MAX_BYTES: Long = 2L * 1024 * 1024
+
+    /** Maksimal karakter teks halaman web yang dilampirkan. */
+    const val WEB_MAX_CHARS: Int = 100_000
+
+    /** Maksimal redirect saat mengunduh halaman web. */
+    const val WEB_MAX_REDIRECTS: Int = 5
+
+    /** Timeout (detik) untuk unduhan halaman web. */
+    const val WEB_TIMEOUT_SECONDS: Long = 20
+
+    /** Jumlah karakter pratinjau halaman web sebelum dilampirkan. */
+    const val WEB_PREVIEW_CHARS: Int = 500
+
+    // ---- GitHub (TAHAP 3) ----
+    /** Maksimal permintaan paralel saat membaca isi berkas GitHub. */
+    const val GITHUB_MAX_PARALLEL_REQUESTS: Int = 4
+
+    /** Maksimal byte arsip zipball yang diunduh. */
+    const val GITHUB_ZIPBALL_MAX_BYTES: Long = 50L * 1024 * 1024
+
+    /** Maksimal redirect HTTP saat mengunduh dari GitHub. */
+    const val GITHUB_MAX_REDIRECTS: Int = 5
+
+    /** Maksimal komentar issue/PR yang disertakan (opsional). */
+    const val GITHUB_MAX_ISSUE_COMMENTS: Int = 30
+
+    /** Petunjuk batas saat tanpa token. */
+    const val GITHUB_UNAUTHENTICATED_HINT: String =
+        "Tanpa token, batas GitHub hanya 60 permintaan per jam."
+
+    // ---- Folder lokal (TAHAP 3) ----
+    /** Kedalaman maksimal penelusuran folder lokal. */
+    const val LOCAL_FOLDER_MAX_DEPTH: Int = 8
+
+    /** Jumlah node maksimal dari satu folder lokal. */
+    const val LOCAL_FOLDER_MAX_NODES: Int = 5000
+
     /** Penanda saat lampiran dihilangkan dari konteks riwayat. */
     fun historyOmittedNote(name: String): String = "[lampiran $name dihilangkan dari konteks]"
 }

@@ -9,8 +9,11 @@ import org.json.JSONObject
  * Memakai org.json (sudah tersedia di Android). Fungsi murni tanpa dependensi Android,
  * sehingga bisa diuji sebagai unit test JVM memakai org.json dari testImplementation.
  *
- * Bersifat defensif: JSON yang rusak atau tidak dikenali TIDAK melempar exception,
- * cukup menghasilkan daftar kosong supaya pesan lama tetap bisa dibuka.
+ * Parser bersifat TOLERAN (TAHAP 3 Langkah 2):
+ * - jenis tak dikenal dianggap [AttachmentKind.TEXT] (data lama tetap terbaca),
+ * - field yang hilang diberi nilai default,
+ * - id yang hilang diberi id turunan ("legacy-<indeks>") supaya entri tidak hilang,
+ * - JSON rusak tidak pernah melempar exception.
  */
 object AttachmentCodec {
 
@@ -21,6 +24,7 @@ object AttachmentCodec {
     private const val KEY_SIZE = "sizeBytes"
     private const val KEY_PATH = "path"
     private const val KEY_TEXT = "textContent"
+    private const val KEY_SOURCE_LABEL = "sourceLabel"
 
     fun toJson(attachments: List<Attachment>): String? {
         if (attachments.isEmpty()) return null
@@ -38,6 +42,9 @@ object AttachmentCodec {
                         if (attachment.textContent != null) {
                             put(KEY_TEXT, attachment.textContent)
                         }
+                        if (attachment.sourceLabel != null) {
+                            put(KEY_SOURCE_LABEL, attachment.sourceLabel)
+                        }
                     }
                 )
             }
@@ -54,10 +61,8 @@ object AttachmentCodec {
             val result = mutableListOf<Attachment>()
             for (i in 0 until array.length()) {
                 val obj = array.optJSONObject(i) ?: continue
-                val id = obj.optString(KEY_ID).ifBlank { continue }
-                val kind = runCatching {
-                    AttachmentKind.valueOf(obj.optString(KEY_KIND))
-                }.getOrNull() ?: continue
+                val kind = parseKind(obj.optString(KEY_KIND))
+                val id = obj.optString(KEY_ID).ifBlank { "legacy-$i" }
                 result.add(
                     Attachment(
                         id = id,
@@ -66,11 +71,8 @@ object AttachmentCodec {
                         mime = obj.optString(KEY_MIME),
                         sizeBytes = obj.optLong(KEY_SIZE, 0L),
                         path = obj.optString(KEY_PATH),
-                        textContent = if (obj.has(KEY_TEXT) && !obj.isNull(KEY_TEXT)) {
-                            obj.optString(KEY_TEXT)
-                        } else {
-                            null
-                        }
+                        textContent = optNullableString(obj, KEY_TEXT),
+                        sourceLabel = optNullableString(obj, KEY_SOURCE_LABEL)?.takeIf { it.isNotBlank() }
                     )
                 )
             }
@@ -79,4 +81,13 @@ object AttachmentCodec {
             emptyList()
         }
     }
+
+    /** Jenis tak dikenal atau kosong -> TEXT (perilaku toleran TAHAP 3). */
+    private fun parseKind(raw: String?): AttachmentKind {
+        if (raw.isNullOrBlank()) return AttachmentKind.TEXT
+        return runCatching { AttachmentKind.valueOf(raw) }.getOrNull() ?: AttachmentKind.TEXT
+    }
+
+    private fun optNullableString(obj: JSONObject, key: String): String? =
+        if (obj.has(key) && !obj.isNull(key)) obj.optString(key) else null
 }
