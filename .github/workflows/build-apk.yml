@@ -70,10 +70,16 @@ jobs:
           fi
 
       - name: Run unit tests
-        run: gradle :app:testDebugUnitTest --no-daemon
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle :app:testDebugUnitTest --no-daemon 2>&1 | tee build.log
 
       - name: Build Debug APK
-        run: gradle :app:assembleDebug --stacktrace --no-daemon
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee -a build.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -105,5 +111,14 @@ jobs:
             app/build/reports/
             app/build/test-results/
             **/build/reports/problems/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload build log (jika gagal)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
           if-no-files-found: ignore
           retention-days: 7
