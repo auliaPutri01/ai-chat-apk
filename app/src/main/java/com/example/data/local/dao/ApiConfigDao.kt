@@ -19,6 +19,12 @@ interface ApiConfigDao {
     @Query("SELECT * FROM api_configs ORDER BY providerName ASC")
     fun getAllConfigs(): Flow<List<ApiConfigEntity>>
 
+    @Query("SELECT * FROM api_configs WHERE id = :configId LIMIT 1")
+    suspend fun getConfigById(configId: String): ApiConfigEntity?
+
+    @Query("SELECT * FROM api_configs ORDER BY providerName ASC")
+    suspend fun getAllConfigsOnce(): List<ApiConfigEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(config: ApiConfigEntity)
 

@@ -80,11 +80,12 @@ object ProviderPresets {
         ),
         ProviderPreset(
             id = "custom",
-            name = "Kustom / Self-Hosted",
+            name = "Custom (OpenAI-compatible)",
             defaultBaseUrl = "https://your-custom-llm-endpoint.com/v1/",
             sampleApiKey = "",
-            models = listOf("custom-model"),
-            description = "Server proxy, vLLM, TGI, atau gateway sendiri",
+            // "gpt-6-luna-free" hanya contoh/placeholder nama model, bukan nilai paksa.
+            models = listOf("gpt-6-luna-free"),
+            description = "Server proxy, vLLM, TGI, MiniMax, atau gateway OpenAI-compatible sendiri",
             iconEmoji = "⚙️"
         )
     )
