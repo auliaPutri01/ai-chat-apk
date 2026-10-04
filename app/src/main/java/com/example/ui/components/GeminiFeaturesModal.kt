@@ -80,7 +80,6 @@ import java.io.File
 
 enum class GeminiToolTab {
     CHAT_ROLES,
-    MAPS_GROUNDING,
     TRANSCRIBE,
     IMAGE_STUDIO,
     VEO_VIDEO
@@ -140,7 +139,7 @@ fun GeminiFeaturesModal(
                             color = MaterialTheme.colorScheme.onBackground
                         )
                         Text(
-                            text = "Multi-turn, Maps, Transcribe, Image, & Veo Video",
+                            text = "Multi-turn, Transkrip, Image, & Veo Video",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -174,11 +173,6 @@ fun GeminiFeaturesModal(
                     onClick = { currentTab = GeminiToolTab.CHAT_ROLES }
                 )
                 TabChip(
-                    title = "📍 Maps Grounding",
-                    selected = currentTab == GeminiToolTab.MAPS_GROUNDING,
-                    onClick = { currentTab = GeminiToolTab.MAPS_GROUNDING }
-                )
-                TabChip(
                     title = "🎙️ Transkrip Audio",
                     selected = currentTab == GeminiToolTab.TRANSCRIBE,
                     onClick = { currentTab = GeminiToolTab.TRANSCRIBE }
@@ -205,7 +199,6 @@ fun GeminiFeaturesModal(
             ) {
                 when (currentTab) {
                     GeminiToolTab.CHAT_ROLES -> GeminiChatRoleTab(viewModel, onDismiss)
-                    GeminiToolTab.MAPS_GROUNDING -> GeminiMapsTab(viewModel, onDismiss)
                     GeminiToolTab.TRANSCRIBE -> GeminiTranscribeTab(viewModel, onDismiss)
                     GeminiToolTab.IMAGE_STUDIO -> GeminiImageStudioTab(viewModel, onDismiss)
                     GeminiToolTab.VEO_VIDEO -> GeminiVeoVideoTab(viewModel, onDismiss)
@@ -353,66 +346,7 @@ private fun GeminiChatRoleTab(
 }
 
 // -------------------------------------------------------------
-// 2. GOOGLE MAPS GROUNDING TAB
-// -------------------------------------------------------------
-@Composable
-private fun GeminiMapsTab(
-    viewModel: ChatViewModel,
-    onDismiss: () -> Unit
-) {
-    var query by remember { mutableStateOf("Rekomendasi kafe terbaik di Jakarta Selatan yang buka malam ini") }
-    var isLoading by remember { mutableStateOf(false) }
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "Google Maps Grounding (gemini-3.5-flash)",
-            fontWeight = FontWeight.Bold,
-            fontSize = 15.sp,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Text(
-            text = "Dapatkan informasi tempat, rute, rating, dan alamat paling mutakhir langsung dari Google Maps.",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            label = { Text("Pertanyaan Lokasi / Peta") },
-            maxLines = 3,
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = GptEmerald,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline
-            )
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(
-            onClick = {
-                if (query.isNotBlank()) {
-                    isLoading = true
-                    viewModel.askWithMapsGrounding(query)
-                    onDismiss()
-                }
-            },
-            enabled = !isLoading && query.isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = GptEmerald)
-        ) {
-            Icon(imageVector = Icons.Default.PinDrop, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Tanyakan dengan Maps Grounding", fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-// -------------------------------------------------------------
-// 3. AUDIO TRANSCRIPTION (gemini-3.5-transcribe)
+// 2. AUDIO TRANSCRIPTION (gemini-3.5-transcribe)
 // -------------------------------------------------------------
 @Composable
 private fun GeminiTranscribeTab(
@@ -556,7 +490,7 @@ private fun GeminiTranscribeTab(
 }
 
 // -------------------------------------------------------------
-// 4. IMAGE STUDIO (gemini-3.1-flash-image-preview)
+// 3. IMAGE STUDIO (gemini-3.1-flash-image-preview)
 // -------------------------------------------------------------
 @Composable
 private fun GeminiImageStudioTab(
@@ -704,7 +638,7 @@ private fun GeminiImageStudioTab(
 }
 
 // -------------------------------------------------------------
-// 5. VEO 3 VIDEO GENERATION (veo-3.1-fast-generate-preview)
+// 4. VEO 3 VIDEO GENERATION (veo-3.1-fast-generate-preview)
 // -------------------------------------------------------------
 @Composable
 private fun GeminiVeoVideoTab(

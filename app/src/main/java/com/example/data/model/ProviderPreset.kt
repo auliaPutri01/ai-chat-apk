@@ -25,7 +25,7 @@ object ProviderPresets {
                 "veo-3.1-fast-generate-preview",
                 "gemini-3.5-transcribe"
             ),
-            description = "Chat, Veo 3 Video, Image Edit, Maps Grounding & Transcribe",
+            description = "Chat, Veo 3 Video, Image Edit & Transcribe",
             iconEmoji = "✨"
         ),
         ProviderPreset(

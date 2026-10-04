@@ -1061,50 +1061,7 @@ class ChatViewModel(
         }
     }
 
-    // 2. Maps Grounding with gemini-3.5-flash
-    fun askWithMapsGrounding(prompt: String) {
-        viewModelScope.launch {
-            val currentId = getOrCreateSessionId(prompt)
-            val userMsg = ChatMessageEntity(
-                id = UUID.randomUUID().toString(),
-                sessionId = currentId,
-                role = "user",
-                content = "📍 [Maps Grounding]: $prompt",
-                status = "DONE"
-            )
-            repository.insertMessage(userMsg)
-
-            val assistantId = UUID.randomUUID().toString()
-            var assistantMsg = ChatMessageEntity(
-                id = assistantId,
-                sessionId = currentId,
-                role = "assistant",
-                content = "Sedang mengambil data lokasi dan tempat terkini dari Google Maps...",
-                status = "SENDING"
-            )
-            repository.insertMessage(assistantMsg)
-
-            _isGenerating.value = true
-            val result = repository.callMapsGrounding(prompt, apiConfig.value?.apiKey)
-            result.onSuccess { reply ->
-                assistantMsg = assistantMsg.copy(
-                    content = "📍 **Hasil Google Maps Grounding:**\n\n$reply",
-                    status = "DONE"
-                )
-                repository.updateMessage(assistantMsg)
-            }.onFailure { err ->
-                assistantMsg = assistantMsg.copy(
-                    content = "⚠️ Gagal Maps Grounding: ${err.message}",
-                    status = "ERROR",
-                    errorMessage = err.message
-                )
-                repository.updateMessage(assistantMsg)
-            }
-            _isGenerating.value = false
-        }
-    }
-
-    // 3. Audio Transcription with gemini-3.5-transcribe
+    // 2. Audio Transcription with gemini-3.5-transcribe
     fun transcribeAndInsert(audioFile: File, onComplete: () -> Unit) {
         viewModelScope.launch {
             val result = repository.transcribeAudio(audioFile, apiConfig.value?.apiKey)
@@ -1127,7 +1084,7 @@ class ChatViewModel(
         }
     }
 
-    // 4. Create & Edit Images using gemini-3.1-flash-image-preview
+    // 3. Create & Edit Images using gemini-3.1-flash-image-preview
     fun createOrEditImage(prompt: String, sourceBitmap: Bitmap?, aspectRatio: String) {
         viewModelScope.launch {
             val title = if (sourceBitmap == null) "Generate: $prompt" else "Edit Image: $prompt"
@@ -1181,7 +1138,7 @@ class ChatViewModel(
         }
     }
 
-    // 5. Veo 3 Video Generation (veo-3.1-fast-generate-preview)
+    // 4. Veo 3 Video Generation (veo-3.1-fast-generate-preview)
     fun generateVeoVideo(prompt: String, sourceBitmap: Bitmap?, aspectRatio: String) {
         viewModelScope.launch {
             val title = if (sourceBitmap == null) "Veo Video: $prompt" else "Animate Photo: $prompt"
