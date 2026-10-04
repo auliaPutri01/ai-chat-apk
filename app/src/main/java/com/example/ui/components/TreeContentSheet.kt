@@ -48,8 +48,6 @@ import com.example.data.attachment.AttachmentLimits
 import com.example.data.attachment.FileTreeBuilder
 import com.example.data.attachment.TreeResult
 import com.example.ui.TreeSheetState
-import com.example.ui.theme.GptEmerald
-import com.example.ui.theme.StatusWarning
 
 /**
  * Pemilih isi berkas generik untuk semua sumber (ZIP, GitHub, folder lokal) dan semua jenis
@@ -127,7 +125,7 @@ fun TreeContentSheet(
                     Text(
                         text = result.warning,
                         style = MaterialTheme.typography.bodySmall,
-                        color = StatusWarning,
+                        color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(bottom = 6.dp)
                     )
                 }
@@ -146,7 +144,7 @@ fun TreeContentSheet(
                         text = "\u2248 " + roughlyTokens + " / " + totalTokens + " token (anggaran " +
                             AttachmentLimits.ZIP_TOKEN_BUDGET + ")",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (roughlyTokens <= AttachmentLimits.ZIP_TOKEN_BUDGET) GptEmerald else StatusWarning
+                        color = if (roughlyTokens <= AttachmentLimits.ZIP_TOKEN_BUDGET) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                     )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
@@ -249,7 +247,7 @@ fun TreeContentSheet(
                 Text(
                     text = message,
                     style = MaterialTheme.typography.bodySmall,
-                    color = StatusWarning,
+                    color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.testTag("tree_error")
                 )
             }

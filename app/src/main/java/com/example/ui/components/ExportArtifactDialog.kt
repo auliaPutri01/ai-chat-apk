@@ -42,7 +42,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.entity.ChatMessageEntity
-import com.example.ui.theme.GptEmerald
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -137,7 +136,7 @@ fun ExportArtifactDialog(
                 onClick = onDismiss,
                 modifier = Modifier.testTag("close_export_dialog_button")
             ) {
-                Text("Tutup", color = GptEmerald)
+                Text("Tutup", color = MaterialTheme.colorScheme.primary)
             }
         }
     )
@@ -163,7 +162,7 @@ private fun ArtifactOptionItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = GptEmerald,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
@@ -218,7 +217,7 @@ private fun ArtifactOptionItem(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
-                    .background(GptEmerald.copy(alpha = 0.15f))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                     .clickable { onShare() }
                     .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
@@ -226,7 +225,7 @@ private fun ArtifactOptionItem(
                     Icon(
                         imageVector = Icons.Default.Share,
                         contentDescription = "Bagikan",
-                        tint = GptEmerald,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -234,7 +233,7 @@ private fun ArtifactOptionItem(
                         text = "Bagikan",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = GptEmerald
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             }

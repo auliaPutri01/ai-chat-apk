@@ -3,11 +3,18 @@ package com.example.ui.components
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.widget.Toast
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,21 +23,24 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -39,13 +49,20 @@ import androidx.compose.ui.unit.sp
 import com.example.data.local.entity.ChatMessageEntity
 import com.example.data.model.Attachment
 import com.example.data.model.AttachmentCodec
-import com.example.ui.theme.GptEmerald
-import com.example.ui.theme.StatusError
 
 /** Lampiran pesan ini; pesan assistant tidak pernah punya lampiran. */
 private fun messageAttachments(message: ChatMessageEntity): List<Attachment> =
     AttachmentCodec.fromJson(message.attachmentsJson)
 
+/**
+ * Satu pesan pada percakapan.
+ *
+ * - Pesan pengguna: gelembung tonal rata kanan (lebar maksimum 85%, sudut 20dp).
+ * - Balasan asisten: tanpa gelembung, teks penuh lebar dengan [AiLogo] kecil di atasnya,
+ *   markdown tetap lewat [FormattedMessageContent], plus baris aksi kecil (salin/ulangi/bagikan).
+ * - Status ERROR tampil sebagai kartu tipis berwarna error dengan tombol "Coba lagi".
+ * - Status SENDING dengan isi kosong menampilkan indikator mengetik tiga titik.
+ */
 @Composable
 fun ChatMessageItem(
     message: ChatMessageEntity,
@@ -56,186 +73,203 @@ fun ChatMessageItem(
     val context = LocalContext.current
     val isUser = message.role == "user"
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
-    ) {
-        if (isUser) {
-            // User Message Bubble (ChatGPT App style)
+    if (isUser) {
+        BoxWithConstraints(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+        ) {
+            val maxBubbleWidth = maxWidth * 0.85f
             Column(
-                horizontalAlignment = Alignment.End,
-                modifier = Modifier.fillMaxWidth(0.88f)
-            ) {
-                // Thumbnail gambar & chip berkas dari lampiran pesan ini
-                MessageAttachments(attachments = messageAttachments(message))
-
-                if (message.content.isNotBlank()) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                        .testTag("user_message_bubble")
-                ) {
-                    Text(
-                        text = message.content,
-                        style = MaterialTheme.typography.bodyLarge.copy(
-                            color = MaterialTheme.colorScheme.onBackground,
-                            lineHeight = 22.sp
-                        )
-                    )
-                }
-                }
-            }
-        } else {
-            // Assistant Message (Full width clean ChatGPT format)
-            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("assistant_message_item"),
-                verticalAlignment = Alignment.Top
+                    .widthIn(max = maxBubbleWidth)
+                    .align(Alignment.CenterEnd),
+                horizontalAlignment = Alignment.End
             ) {
-                // AI Emblem Avatar
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(GptEmerald),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = "AI Hub Avatar",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    // Header with model badge
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(bottom = 4.dp)
+                MessageAttachments(attachments = messageAttachments(message))
+                if (message.content.isNotBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .widthIn(max = maxBubbleWidth)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .testTag("user_message_bubble")
                     ) {
                         Text(
-                            text = "AI Hub",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = modelName,
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    // Content
-                    if (message.status == "ERROR") {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0x22EF4444))
-                                .border(1.dp, StatusError, RoundedCornerShape(8.dp))
-                                .padding(12.dp)
-                        ) {
-                            Column {
-                                Text(
-                                    text = message.content,
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                    fontSize = 14.sp,
-                                    lineHeight = 20.sp
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    IconButton(
-                                        onClick = onRetry,
-                                        modifier = Modifier.testTag("retry_message_button")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Refresh,
-                                            contentDescription = "Coba Lagi",
-                                            tint = StatusError
-                                        )
-                                    }
-                                    Text(
-                                        text = "Coba Kirim Ulang",
-                                        color = StatusError,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        FormattedMessageContent(
                             text = message.content,
-                            isStreaming = message.status == "SENDING"
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                color = MaterialTheme.colorScheme.onSurface,
+                                lineHeight = 22.sp
+                            )
                         )
-                    }
-
-                    // Penanda profil penjawab bila jawaban datang dari profil cadangan
-                    ServedByChip(servedBy = message.servedBy)
-
-                    // Bottom Action Icons (Copy, Retry)
-                    if (message.status != "SENDING" && message.content.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.Start
-                        ) {
-                            IconButton(
-                                onClick = {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val clip = ClipData.newPlainText("AI Hub Response", message.content)
-                                    clipboard.setPrimaryClip(clip)
-                                    Toast.makeText(context, "Respons disalin", Toast.LENGTH_SHORT).show()
-                                },
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .testTag("copy_message_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ContentCopy,
-                                    contentDescription = "Salin Respons",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-
-                            IconButton(
-                                onClick = onRetry,
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .testTag("regenerate_message_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = "Regenerasi Respons",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
                     }
                 }
             }
         }
+        return
     }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .testTag("assistant_message_item")
+    ) {
+        AiLogo(size = 24.dp)
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        when {
+            message.status == "ERROR" -> ErrorCard(message = message, onRetry = onRetry)
+
+            message.status == "SENDING" && message.content.isBlank() -> TypingIndicator()
+
+            else -> FormattedMessageContent(
+                text = message.content,
+                isStreaming = message.status == "SENDING"
+            )
+        }
+
+        // Chip penanda profil cadangan + chip lampiran (kecil dan kalem).
+        ServedByChip(servedBy = message.servedBy)
+
+        if (message.status != "SENDING" && message.status != "ERROR" && message.content.isNotBlank()) {
+            Row(
+                modifier = Modifier.padding(top = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SmallAction(
+                    icon = Icons.Default.ContentCopy,
+                    contentDescription = "Salin balasan",
+                    testTag = "copy_message_button"
+                ) {
+                    copyToClipboard(context, message.content)
+                }
+                SmallAction(
+                    icon = Icons.Default.Refresh,
+                    contentDescription = "Ulangi balasan",
+                    testTag = "regenerate_message_button",
+                    onClick = onRetry
+                )
+                SmallAction(
+                    icon = Icons.Default.Share,
+                    contentDescription = "Bagikan balasan",
+                    testTag = "share_message_button"
+                ) {
+                    shareText(context, message.content)
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = modelName,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/** Tiga titik beranimasi selama balasan belum berisi teks. */
+@Composable
+private fun TypingIndicator() {
+    val transition = rememberInfiniteTransition(label = "typing")
+    Row(
+        modifier = Modifier
+            .height(24.dp)
+            .testTag("typing_indicator"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        repeat(3) { index ->
+            val alpha by transition.animateFloat(
+                initialValue = 0.25f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 600, delayMillis = index * 180),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "dot$index"
+            )
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .alpha(alpha)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant)
+            )
+        }
+    }
+}
+
+/** Kartu tipis berwarna error dengan tombol coba lagi. */
+@Composable
+private fun ErrorCard(message: ChatMessageEntity, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .testTag("message_error_card")
+    ) {
+        Text(
+            text = message.errorMessage ?: message.content,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 14.sp,
+            lineHeight = 20.sp
+        )
+        TextButton(
+            onClick = onRetry,
+            modifier = Modifier.testTag("retry_message_button")
+        ) {
+            Icon(
+                imageVector = Icons.Default.Refresh,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Coba lagi", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+/** Ikon aksi kecil 40dp (target sentuh tetap lega karena padding Tombol). */
+@Composable
+private fun SmallAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    testTag: String,
+    onClick: () -> Unit
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(40.dp)
+            .testTag(testTag)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+private fun copyToClipboard(context: Context, text: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("AI Hub", text))
+    Toast.makeText(context, "Disalin", Toast.LENGTH_SHORT).show()
+}
+
+private fun shareText(context: Context, text: String) {
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(intent, "Bagikan balasan"))
 }

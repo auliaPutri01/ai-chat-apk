@@ -16,6 +16,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Inventory2
@@ -35,7 +38,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.attachment.AttachmentLimits
-import com.example.ui.theme.GptEmerald
 
 /**
  * Bottom sheet pemilih jenis lampiran: Foto/Gambar, File teks/kode, atau ZIP.
@@ -50,7 +52,11 @@ fun AttachmentPickerSheet(
     onPickGitHub: () -> Unit,
     onPickFolder: () -> Unit,
     onPickWeb: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** Alat Gemini: Image Studio, Video Veo, dan Transkripsi suara. */
+    onOpenImageStudio: () -> Unit = {},
+    onOpenVeoVideo: () -> Unit = {},
+    onOpenTranscribe: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -80,7 +86,7 @@ fun AttachmentPickerSheet(
                     " gambar per pesan, " +
                     com.example.data.model.Attachment.formatSize(AttachmentLimits.MAX_IMAGE_BYTES) +
                     " per gambar",
-                icon = { Icon(Icons.Default.Image, contentDescription = null, tint = GptEmerald) },
+                icon = { Icon(Icons.Default.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 testTag = "pick_images_option",
                 onClick = onPickImages
             )
@@ -89,7 +95,7 @@ fun AttachmentPickerSheet(
             PickerRow(
                 title = "File teks / kode",
                 subtitle = "kt, java, py, js, ts, json, xml, yaml, md, txt, csv, sql, dan lainnya",
-                icon = { Icon(Icons.Default.Description, contentDescription = null, tint = GptEmerald) },
+                icon = { Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 testTag = "pick_files_option",
                 onClick = onPickFiles
             )
@@ -98,7 +104,7 @@ fun AttachmentPickerSheet(
             PickerRow(
                 title = "ZIP proyek",
                 subtitle = "Pilih berkas mana yang dikirim lewat pohon berkas",
-                icon = { Icon(Icons.Default.Inventory2, contentDescription = null, tint = GptEmerald) },
+                icon = { Icon(Icons.Default.Inventory2, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 testTag = "pick_zip_option",
                 onClick = onPickZip
             )
@@ -107,7 +113,7 @@ fun AttachmentPickerSheet(
             PickerRow(
                 title = "Dari GitHub",
                 subtitle = "Repo, branch, lalu pilih berkas atau unduh sebagai ZIP",
-                icon = { Icon(Icons.Default.Cloud, contentDescription = null, tint = GptEmerald) },
+                icon = { Icon(Icons.Default.Cloud, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 testTag = "pick_github_option",
                 onClick = onPickGitHub
             )
@@ -116,7 +122,7 @@ fun AttachmentPickerSheet(
             PickerRow(
                 title = "Dari folder",
                 subtitle = "Folder di perangkat (izin akses tersimpan)",
-                icon = { Icon(Icons.Default.Folder, contentDescription = null, tint = GptEmerald) },
+                icon = { Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 testTag = "pick_folder_option",
                 onClick = onPickFolder
             )
@@ -125,9 +131,44 @@ fun AttachmentPickerSheet(
             PickerRow(
                 title = "Dari tautan web",
                 subtitle = "Ambil isi halaman http/https sebagai teks",
-                icon = { Icon(Icons.Default.Language, contentDescription = null, tint = GptEmerald) },
+                icon = { Icon(Icons.Default.Language, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 testTag = "pick_web_option",
                 onClick = onPickWeb
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                text = "Alat Gemini",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            PickerRow(
+                title = "Image Studio",
+                subtitle = "Buat & sunting gambar",
+                icon = { Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                testTag = "pick_image_studio_option",
+                onClick = onOpenImageStudio
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            PickerRow(
+                title = "Video Veo",
+                subtitle = "Teks atau foto menjadi video",
+                icon = { Icon(Icons.Default.Movie, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                testTag = "pick_veo_option",
+                onClick = onOpenVeoVideo
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            PickerRow(
+                title = "Transkripsi suara",
+                subtitle = "Rekam mikrofon lalu ubah menjadi teks",
+                icon = { Icon(Icons.Default.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                testTag = "pick_transcribe_option",
+                onClick = onOpenTranscribe
             )
 
             Spacer(modifier = Modifier.height(14.dp))

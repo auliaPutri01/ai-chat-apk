@@ -48,8 +48,6 @@ import com.example.data.attachment.AttachmentLimits
 import com.example.data.attachment.ZipScanResult
 import com.example.data.attachment.ZipTreeBuilder
 import com.example.data.model.Attachment
-import com.example.ui.theme.GptEmerald
-import com.example.ui.theme.StatusWarning
 
 /**
  * Bottom sheet pemilih isi ZIP: pohon berkas dengan centang, penghitung ukuran dan
@@ -107,7 +105,7 @@ fun ZipContentSheet(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(
-                        if (overBudget) StatusWarning.copy(alpha = 0.15f)
+                        if (overBudget) MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
                         else MaterialTheme.colorScheme.surfaceVariant
                     )
                     .padding(12.dp),
@@ -119,7 +117,7 @@ fun ZipContentSheet(
                         text = "~" + tokens + " token",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (overBudget) StatusWarning else MaterialTheme.colorScheme.onBackground
+                        color = if (overBudget) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground
                     )
                     Text(
                         text = Attachment.formatSize(bytes) + " dari anggaran " +
@@ -133,7 +131,7 @@ fun ZipContentSheet(
                         text = "Melebihi anggaran",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = StatusWarning
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             }
@@ -191,13 +189,13 @@ fun ZipContentSheet(
                         Checkbox(
                             checked = checked,
                             onCheckedChange = null,
-                            colors = CheckboxDefaults.colors(checkedColor = GptEmerald),
+                            colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary),
                             modifier = Modifier.size(30.dp)
                         )
                         Icon(
                             imageVector = if (node.isDirectory) Icons.Default.Folder else Icons.Default.Description,
                             contentDescription = null,
-                            tint = if (node.isDirectory) GptEmerald else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (node.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(15.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
@@ -251,7 +249,7 @@ fun ZipContentSheet(
                         .weight(1.4f)
                         .testTag("zip_confirm_button"),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = GptEmerald,
+                        containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = Color.White
                     )
                 ) {

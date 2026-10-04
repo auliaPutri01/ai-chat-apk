@@ -47,8 +47,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.connector.SavedFolder
 import com.example.ui.ConnectorUiState
-import com.example.ui.theme.GptEmerald
-import com.example.ui.theme.StatusWarning
 
 /**
  * Layar "Konektor": GitHub (token fine-grained), folder lokal (SAF), dan tautan web.
@@ -102,7 +100,7 @@ fun ConnectorScreen(
             } else {
                 "Belum terhubung \u2014 repo publik tetap bisa dibaca"
             },
-            icon = { Icon(Icons.Default.Cloud, contentDescription = null, tint = GptEmerald) },
+            icon = { Icon(Icons.Default.Cloud, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
             testTag = "connector_github_card"
         ) {
             if (state.gitHubConnected) {
@@ -147,7 +145,7 @@ fun ConnectorScreen(
                 Text(
                     text = error,
                     style = MaterialTheme.typography.bodySmall,
-                    color = StatusWarning,
+                    color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.testTag("connector_github_error")
                 )
             }
@@ -159,7 +157,7 @@ fun ConnectorScreen(
         ConnectorCard(
             title = "Folder lokal",
             subtitle = "Folder pilihanmu (izin akses tersimpan)",
-            icon = { Icon(Icons.Default.Folder, contentDescription = null, tint = GptEmerald) },
+            icon = { Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
             testTag = "connector_folder_card"
         ) {
             Button(
@@ -208,7 +206,7 @@ fun ConnectorScreen(
         ConnectorCard(
             title = "Tautan web",
             subtitle = "Ambil isi halaman (http/https) sebagai lampiran WEB_PAGE",
-            icon = { Icon(Icons.Default.Language, contentDescription = null, tint = GptEmerald) },
+            icon = { Icon(Icons.Default.Language, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
             testTag = "connector_web_card"
         ) {
             Text(
@@ -225,7 +223,7 @@ fun ConnectorScreen(
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodySmall,
-                color = GptEmerald,
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.testTag("connector_message")
             )
             TextButton(

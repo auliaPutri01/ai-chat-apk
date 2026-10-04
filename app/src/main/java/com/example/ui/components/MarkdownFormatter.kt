@@ -53,8 +53,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.example.ui.theme.ChatGptDarkCodeBg
-import com.example.ui.theme.GptEmerald
 import kotlinx.coroutines.delay
 
 sealed interface ContentBlock {
@@ -146,7 +144,7 @@ fun FormattedMessageContent(
         if (blocks.isEmpty() && isStreaming) {
             Text(
                 text = "▌",
-                color = GptEmerald,
+                color = MaterialTheme.colorScheme.primary,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -174,7 +172,7 @@ fun RenderMarkdownImage(alt: String, source: String) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF1E1E1E))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(4.dp)
     ) {
         if (bitmap != null) {
@@ -204,8 +202,10 @@ fun RenderFormattedText(
     text: String,
     showCursor: Boolean = false
 ) {
-    val annotated = remember(text, showCursor) {
-        buildAnnotatedText(text, showCursor)
+    val accent = MaterialTheme.colorScheme.primary
+    val inlineCodeBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+    val annotated = remember(text, showCursor, accent, inlineCodeBg) {
+        buildAnnotatedText(text, showCursor, accent, inlineCodeBg)
     }
 
     Text(
@@ -219,7 +219,14 @@ fun RenderFormattedText(
     )
 }
 
-fun buildAnnotatedText(raw: String, showCursor: Boolean): AnnotatedString {
+fun buildAnnotatedText(
+    raw: String,
+    showCursor: Boolean,
+    /** Warna aksen untuk kursor saat streaming (dibaca dari tema oleh pemanggil composable). */
+    cursorColor: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified,
+    /** Latar kode inline (dibaca dari tema oleh pemanggil composable). */
+    inlineCodeBackground: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified
+): AnnotatedString {
     return buildAnnotatedString {
         val lines = raw.split("\n")
         lines.forEachIndexed { lineIdx, line ->
@@ -263,7 +270,7 @@ fun buildAnnotatedText(raw: String, showCursor: Boolean): AnnotatedString {
                             pushStyle(
                                 SpanStyle(
                                     fontFamily = FontFamily.Monospace,
-                                    background = Color(0x33888888),
+                                    background = inlineCodeBackground,
                                     fontSize = 14.sp
                                 )
                             )
@@ -284,7 +291,7 @@ fun buildAnnotatedText(raw: String, showCursor: Boolean): AnnotatedString {
         }
 
         if (showCursor) {
-            pushStyle(SpanStyle(color = GptEmerald, fontWeight = FontWeight.Bold))
+            pushStyle(SpanStyle(color = cursorColor, fontWeight = FontWeight.Bold))
             append(" ▌")
             pop()
         }
@@ -311,13 +318,13 @@ fun CodeBlockView(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(ChatGptDarkCodeBg)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
     ) {
         // Code Block Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF2C2C2C))
+                .background(MaterialTheme.colorScheme.surface)
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -325,7 +332,7 @@ fun CodeBlockView(
             Text(
                 text = language.lowercase(),
                 style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFFCCCCCC),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontFamily = FontFamily.Monospace
             )
 
@@ -353,7 +360,7 @@ fun CodeBlockView(
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = "Tersalin",
-                            tint = GptEmerald,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -366,13 +373,13 @@ fun CodeBlockView(
                             Icon(
                                 imageVector = Icons.Default.ContentCopy,
                                 contentDescription = "Salin Kode",
-                                tint = Color(0xFFCCCCCC),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "Salin",
-                                color = Color(0xFFCCCCCC),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp
                             )
                         }
@@ -393,7 +400,7 @@ fun CodeBlockView(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
-                color = Color(0xFFE6E6E6)
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }

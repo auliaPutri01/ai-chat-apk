@@ -1,27 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Ikon peluncur "AI": huruf A (dua garis miring + palang) dan I (batang tegak)
-  digambar memakai path bersapuan garis (stroke), tanpa font dan tanpa bitmap.
-  Seluruh elemen berada di dalam safe zone adaptive icon (lingkaran 66dp dari kanvas 108dp).
+  Varian monokrom untuk themed icon (Android 13+): bentuk sama dengan foreground,
+  warna solid karena sistem akan mewarnainya sendiri.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-
-    <!-- Huruf A: dua garis miring bertemu di puncak + palang tengah -->
     <path
         android:pathData="M49,34 L37,74 M49,34 L61,74 M42,60 L56,60"
-        android:strokeColor="#FFFFFF"
+        android:strokeColor="#000000"
         android:strokeWidth="6"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
-
-    <!-- Huruf I: batang tegak -->
     <path
         android:pathData="M71,34 L71,74"
-        android:strokeColor="#FFFFFF"
+        android:strokeColor="#000000"
         android:strokeWidth="6"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />

@@ -38,8 +38,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.Attachment
 import com.example.data.model.AttachmentKind
-import com.example.ui.theme.GptEmerald
-import com.example.ui.theme.StatusWarning
 import java.io.File
 
 /** Ikon kecil sesuai jenis lampiran. */
@@ -96,7 +94,7 @@ fun PendingAttachmentRow(
                         Icon(
                             imageVector = attachmentIcon(attachment.kind),
                             contentDescription = null,
-                            tint = GptEmerald,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -184,7 +182,7 @@ fun MessageAttachments(
                     Icon(
                         imageVector = attachmentIcon(attachment.kind),
                         contentDescription = null,
-                        tint = GptEmerald,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(5.dp))
@@ -216,7 +214,7 @@ fun ServedByChip(
         modifier = modifier
             .padding(top = 6.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(StatusWarning.copy(alpha = 0.14f))
+            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.14f))
             .padding(horizontal = 8.dp, vertical = 4.dp)
             .testTag("served_by_chip"),
         verticalAlignment = Alignment.CenterVertically

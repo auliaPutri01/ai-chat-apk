@@ -34,13 +34,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.GptEmerald
 
 @Composable
 fun ModelSelectorDialog(
     currentModel: String,
     onModelSelected: (String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** Membuka pengaturan Base URL / API Key / profil dari menu chip model. */
+    onOpenConfig: () -> Unit = {}
 ) {
     val quickModels = listOf(
         "gemini-3.5-flash",
@@ -87,7 +88,7 @@ fun ModelSelectorDialog(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
                             .background(
-                                if (isSelected) GptEmerald.copy(alpha = 0.15f)
+                                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                 else MaterialTheme.colorScheme.surface
                             )
                             .clickable {
@@ -102,13 +103,13 @@ fun ModelSelectorDialog(
                             text = modelName,
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) GptEmerald else MaterialTheme.colorScheme.onBackground
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
                         )
                         if (isSelected) {
                             Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
-                                tint = GptEmerald,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -144,12 +145,23 @@ fun ModelSelectorDialog(
                     onDismiss()
                 }
             ) {
-                Text("Gunakan", color = GptEmerald)
+                Text("Gunakan", color = MaterialTheme.colorScheme.primary)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Batal")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(
+                    onClick = {
+                        onDismiss()
+                        onOpenConfig()
+                    },
+                    modifier = Modifier.testTag("model_selector_open_config")
+                ) {
+                    Text("Pengaturan API", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Batal")
+                }
             }
         }
     )
