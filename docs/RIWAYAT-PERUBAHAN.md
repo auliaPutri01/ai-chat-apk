@@ -15,10 +15,14 @@ Semua waktu memakai UTC. Pelaksana: **Arena AI**.
   - `0840a7c` — style(ui): rapikan kontras, target sentuh, dan perilaku gulir
   - `cc2ee23` — ci: build UI sederhana (commit pemicu build)
 - **Jumlah berkas/baris:** 40 berkas berubah, +1187 / −1239 (hanya `app/src/main/java/com/example/ui/**` dan `app/src/main/res/**`)
-- **Hasil CI branch:** run [37188931139](https://github.com/auliaPutri01/ai-chat-apk/actions/runs/37188931139) — **SUCCESS** (commit `cc2ee23`)
-- **SHA merge:** _diisi setelah merge_
-- **Tag rilis:** _diisi setelah merge_
-- **Tag cadangan:** `backup/main-sebelum-ui-20261004-0829` → sha `c28cc85`
+- **Hasil CI branch:**
+  - run [37188931139](https://github.com/auliaPutri01/ai-chat-apk/actions/runs/37188931139) — **SUCCESS** (push, commit `cc2ee23`)
+  - run [37189095954](https://github.com/auliaPutri01/ai-chat-apk/actions/runs/37189095954) — **SUCCESS** (pull_request, commit `cc2ee23`)
+  - run [37189113395](https://github.com/auliaPutri01/ai-chat-apk/actions/runs/37189113395) — **SUCCESS** (workflow_dispatch pada commit `48bad2d`, yaitu kepala branch terakhir sebelum merge)
+- **SHA merge:** `8eabd8a` — squash merge PR #4 pada 2026-10-04T08:32:59Z
+- **CI setelah merge (main):** run [37189284602](https://github.com/auliaPutri01/ai-chat-apk/actions/runs/37189284602) — **SUCCESS**
+- **Tag rilis:** [`build-40`](https://github.com/auliaPutri01/ai-chat-apk/releases/tag/build-40) (prerelease, 2026-10-04T08:35:20Z) — aset `app-debug.apk` 21.681.736 B
+- **Tag cadangan:** `backup/main-sebelum-ui-20261004-0829` → sha `c28cc85` (dipush sebelum merge)
 - **Pelaksana:** Arena AI
 
 **Isi ringkas:** antarmuka dibuat sesederhana mungkin ala Gemini chat — top bar minimal (menu, chip
