@@ -237,7 +237,7 @@ private fun ErrorCard(message: ChatMessageEntity, onRetry: () -> Unit) {
     }
 }
 
-/** Ikon aksi kecil 40dp (target sentuh tetap lega karena padding Tombol). */
+/** Ikon aksi kecil 18dp dengan area sentuh 48dp. */
 @Composable
 private fun SmallAction(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -248,7 +248,7 @@ private fun SmallAction(
     IconButton(
         onClick = onClick,
         modifier = Modifier
-            .size(40.dp)
+            .size(48.dp)
             .testTag(testTag)
     ) {
         Icon(

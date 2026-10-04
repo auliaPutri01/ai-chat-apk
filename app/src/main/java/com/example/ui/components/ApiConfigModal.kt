@@ -1072,7 +1072,7 @@ fun ApiConfigModal(
                         .testTag("save_config_button"),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = Color.White
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
                     Text("Simpan & Terapkan", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)

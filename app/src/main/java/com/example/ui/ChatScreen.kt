@@ -182,7 +182,10 @@ fun ChatScreen(
     var stickToBottom by remember { mutableStateOf(true) }
     LaunchedEffect(isAtBottom) { stickToBottom = isAtBottom }
     LaunchedEffect(messages.size, messages.lastOrNull()?.content) {
-        if (messages.isNotEmpty() && stickToBottom) {
+        val last = messages.lastOrNull() ?: return@LaunchedEffect
+        // Pesan kita sendiri selalu diikuti (kita baru menekan kirim);
+        // balasan asisten hanya diikuti bila pengguna masih di dasar daftar.
+        if (stickToBottom || last.role == "user") {
             listState.animateScrollToItem(messages.lastIndex)
         }
     }
@@ -559,7 +562,7 @@ private fun ScrollToBottomButton(
 ) {
     Box(
         modifier = modifier
-            .size(44.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable { onClick() }

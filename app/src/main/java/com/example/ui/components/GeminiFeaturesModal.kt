@@ -125,7 +125,7 @@ fun GeminiFeaturesModal(
                         Icon(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -461,13 +461,19 @@ private fun GeminiTranscribeTab(
                 },
             contentAlignment = Alignment.Center
         ) {
+            // Warna ikon mengikuti warna latar tombol rekam (error saat merekam, primary saat diam).
+            val actionTint = if (isRecording) {
+                MaterialTheme.colorScheme.onError
+            } else {
+                MaterialTheme.colorScheme.onPrimary
+            }
             if (isTranscribing) {
-                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(32.dp))
+                CircularProgressIndicator(color = actionTint, modifier = Modifier.size(32.dp))
             } else {
                 Icon(
                     imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
                     contentDescription = if (isRecording) "Stop Rekam" else "Mulai Rekam",
-                    tint = Color.White,
+                    tint = actionTint,
                     modifier = Modifier.size(36.dp)
                 )
             }

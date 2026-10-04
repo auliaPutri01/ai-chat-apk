@@ -109,7 +109,7 @@ fun PendingAttachmentRow(
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onBackground
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             text = Attachment.formatSize(attachment.sizeBytes) +
@@ -175,7 +175,7 @@ fun MessageAttachments(
                     modifier = Modifier
                         .padding(bottom = 4.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.surface)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(horizontal = 8.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -191,7 +191,7 @@ fun MessageAttachments(
                         fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onBackground
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -223,7 +223,7 @@ fun ServedByChip(
             text = "Dijawab oleh: $servedBy",
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onBackground
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

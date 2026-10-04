@@ -8,41 +8,46 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
+/** Palet cadangan mode gelap: netral dengan satu warna aksen. */
 private val DarkColorScheme = darkColorScheme(
-    primary = GptEmerald,
-    onPrimary = Color.White,
-    primaryContainer = GptEmeraldDark,
-    onPrimaryContainer = Color.White,
-    secondary = GptEmeraldLight,
-    onSecondary = Color.Black,
-    background = ChatGptDarkBg,
-    onBackground = ChatGptDarkText,
-    surface = ChatGptDarkBg,
-    onSurface = ChatGptDarkText,
-    surfaceVariant = ChatGptDarkSurface,
-    onSurfaceVariant = ChatGptDarkTextSecondary,
-    outline = ChatGptDarkBorder,
-    outlineVariant = Color(0xFF333333)
+    primary = NeutralDarkPrimary,
+    onPrimary = NeutralDarkOnPrimary,
+    primaryContainer = NeutralDarkPrimaryContainer,
+    onPrimaryContainer = NeutralDarkOnPrimaryContainer,
+    secondary = NeutralDarkSecondary,
+    onSecondary = NeutralDarkOnSecondary,
+    background = NeutralDarkBackground,
+    onBackground = NeutralDarkOnBackground,
+    surface = NeutralDarkBackground,
+    onSurface = NeutralDarkOnBackground,
+    surfaceVariant = NeutralDarkSurfaceVariant,
+    onSurfaceVariant = NeutralDarkOnSurfaceVariant,
+    outline = NeutralDarkOutline,
+    outlineVariant = NeutralDarkOutlineVariant,
+    error = NeutralDarkError,
+    onError = NeutralDarkOnError
 )
 
+/** Palet cadangan mode terang: netral dengan satu warna aksen. */
 private val LightColorScheme = lightColorScheme(
-    primary = GptEmerald,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFE8F5E9),
-    onPrimaryContainer = GptEmeraldDark,
-    secondary = GptEmeraldDark,
-    onSecondary = Color.White,
-    background = ChatGptLightBg,
-    onBackground = ChatGptLightText,
-    surface = ChatGptLightBg,
-    onSurface = ChatGptLightText,
-    surfaceVariant = ChatGptLightSurface,
-    onSurfaceVariant = ChatGptLightTextSecondary,
-    outline = ChatGptLightBorder,
-    outlineVariant = Color(0xFFEEEEEE)
+    primary = NeutralLightPrimary,
+    onPrimary = NeutralLightOnPrimary,
+    primaryContainer = NeutralLightPrimaryContainer,
+    onPrimaryContainer = NeutralLightOnPrimaryContainer,
+    secondary = NeutralLightSecondary,
+    onSecondary = NeutralLightOnSecondary,
+    background = NeutralLightBackground,
+    onBackground = NeutralLightOnBackground,
+    surface = NeutralLightBackground,
+    onSurface = NeutralLightOnBackground,
+    surfaceVariant = NeutralLightSurfaceVariant,
+    onSurfaceVariant = NeutralLightOnSurfaceVariant,
+    outline = NeutralLightOutline,
+    outlineVariant = NeutralLightOutlineVariant,
+    error = NeutralLightError,
+    onError = NeutralLightOnError
 )
 
 /**

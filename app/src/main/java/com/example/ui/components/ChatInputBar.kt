@@ -84,7 +84,7 @@ fun ChatInputBar(
             IconButton(
                 onClick = onOpenAttachmentPicker,
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(48.dp)
                     .testTag("open_attachment_picker_button")
             ) {
                 Icon(
@@ -98,7 +98,7 @@ fun ChatInputBar(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = 40.dp, max = 132.dp)
+                    .heightIn(min = 44.dp, max = 132.dp)
                     .padding(vertical = 9.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
@@ -116,7 +116,7 @@ fun ChatInputBar(
                     onValueChange = onInputChange,
                     textStyle = TextStyle(
                         fontSize = 16.sp,
-                        color = MaterialTheme.colorScheme.onBackground,
+                        color = MaterialTheme.colorScheme.onSurface,
                         lineHeight = 22.sp
                     ),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -167,7 +167,10 @@ fun ChatInputBar(
     }
 }
 
-/** Tombol bulat 40dp (di dalam pill) dengan kontras mengikuti tema. */
+/**
+ * Tombol bulat di dalam pill: lingkaran visual 40dp dengan area sentuh 48dp,
+ * warna mengikuti tema (tidak ada warna hard-code).
+ */
 @Composable
 private fun CircleActionButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -179,18 +182,24 @@ private fun CircleActionButton(
 ) {
     Box(
         modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .background(container)
+            .size(48.dp)
             .clickable { onClick() }
             .testTag(testTag),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = iconTint,
-            modifier = Modifier.size(20.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(container),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = iconTint,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }

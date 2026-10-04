@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -212,7 +213,7 @@ fun ChatDrawerContent(
                                         renameInput = session.title
                                     },
                                     modifier = Modifier
-                                        .size(40.dp)
+                                        .size(48.dp)
                                         .testTag("rename_session_" + session.id)
                                 ) {
                                     Icon(
@@ -225,7 +226,7 @@ fun ChatDrawerContent(
                                 IconButton(
                                     onClick = { onDeleteSession(session.id) },
                                     modifier = Modifier
-                                        .size(40.dp)
+                                        .size(48.dp)
                                         .testTag("delete_session_" + session.id)
                                 ) {
                                     Icon(
@@ -354,6 +355,7 @@ private fun DrawerFooterRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(10.dp))
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 12.dp)
