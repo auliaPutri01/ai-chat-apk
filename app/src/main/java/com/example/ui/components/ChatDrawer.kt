@@ -10,20 +10,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -41,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,10 +47,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.entity.ApiConfigEntity
 import com.example.data.local.entity.ChatSessionEntity
-import com.example.ui.theme.ChatGptDarkSidebar
-import com.example.ui.theme.GptEmerald
-import com.example.ui.theme.StatusError
+import java.util.Calendar
 
+/**
+ * Drawer riwayat chat yang sederhana: pencarian di atas, daftar judul chat yang dikelompokkan
+ * (Hari ini / Kemarin / Sebelumnya), tombol "Chat baru", dan di dasar "Pengaturan API",
+ * "Ekspor artefak", serta "Hapus semua". Mengganti nama dan menghapus chat tetap tersedia
+ * lewat ikon kecil pada baris yang sedang dipilih.
+ */
 @Composable
 fun ChatDrawerContent(
     sessions: List<ChatSessionEntity>,
@@ -64,177 +66,174 @@ fun ChatDrawerContent(
     onRenameSession: (String, String) -> Unit,
     onClearAll: () -> Unit,
     onOpenConfig: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Ekspor artefak percakapan aktif (dipindah ke drawer agar top bar tetap minimal). */
+    onOpenExport: () -> Unit = {}
 ) {
     var sessionToRename by remember { mutableStateOf<ChatSessionEntity?>(null) }
     var renameInput by remember { mutableStateOf("") }
     var showClearAllConfirm by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+
+    val visible = remember(sessions, query) {
+        if (query.isBlank()) {
+            sessions
+        } else {
+            sessions.filter { it.title.contains(query.trim(), ignoreCase = true) }
+        }
+    }
+    val groups = remember(visible) { groupSessions(visible) }
 
     Column(
         modifier = modifier
             .fillMaxHeight()
-            .width(300.dp)
-            .background(ChatGptDarkSidebar)
+            .width(310.dp)
+            .background(MaterialTheme.colorScheme.surface)
             .statusBarsPadding()
-            .padding(16.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
             .testTag("chat_drawer_content")
     ) {
-        // App Title & Brand
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = 16.dp, top = 8.dp)
+            modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 12.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(GptEmerald),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.AutoAwesome,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+            AiLogo(size = 28.dp)
             Spacer(modifier = Modifier.width(10.dp))
-            Column {
-                Text(
-                    text = "AI Hub",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = Color.White
-                )
-                Text(
-                    text = "ChatGPT Experience",
-                    fontSize = 11.sp,
-                    color = Color(0xFF9E9E9E)
-                )
-            }
+            Text(
+                text = "AI Hub",
+                fontWeight = FontWeight.Bold,
+                fontSize = 17.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
 
-        // New Chat Button
-        Box(
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            placeholder = { Text("Cari chat") },
+            singleLine = true,
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF262626))
-                .clickable { onNewChat() }
-                .padding(horizontal = 14.dp, vertical = 12.dp)
-                .testTag("drawer_new_chat_button")
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Chat Baru",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "Chat Baru",
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 15.sp,
-                    color = Color.White
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // History Section Header
-        Text(
-            text = "Riwayat Percakapan",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color(0xFF888888),
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                .testTag("drawer_search_field")
         )
 
-        // Sessions List
-        LazyColumn(
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Row(
             modifier = Modifier
-                .weight(1f)
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { onNewChat() }
+                .padding(horizontal = 12.dp, vertical = 12.dp)
+                .testTag("drawer_new_chat_button"),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            if (sessions.isEmpty()) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "Chat baru",
+                fontWeight = FontWeight.Medium,
+                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            if (visible.isEmpty()) {
                 item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 32.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Belum ada riwayat chat",
-                            color = Color(0xFF666666),
-                            fontSize = 13.sp
-                        )
-                    }
+                    Text(
+                        text = if (sessions.isEmpty()) {
+                            "Belum ada riwayat chat"
+                        } else {
+                            "Tidak ada chat yang cocok"
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(start = 12.dp, top = 24.dp)
+                    )
                 }
             } else {
-                items(sessions, key = { it.id }) { session ->
-                    val isSelected = session.id == currentSessionId
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) Color(0xFF2C2C2C) else Color.Transparent)
-                            .clickable { onSelectSession(session.id) }
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                groups.forEach { (label, groupItems) ->
+                    item(key = "header-$label") {
+                        Text(
+                            text = label,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 12.dp, top = 14.dp, bottom = 4.dp)
+                        )
+                    }
+                    items(groupItems.size, key = { index -> groupItems[index].id }) { index ->
+                        val session = groupItems[index]
+                        val isSelected = session.id == currentSessionId
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 1.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (isSelected) {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    } else {
+                                        MaterialTheme.colorScheme.surface
+                                    }
+                                )
+                                .clickable { onSelectSession(session.id) }
+                                .padding(start = 12.dp, end = 4.dp)
+                                .testTag("drawer_session_" + session.id),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.ChatBubbleOutline,
-                                contentDescription = null,
-                                tint = if (isSelected) Color.White else Color(0xFF888888),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = session.title,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 fontSize = 14.sp,
-                                color = if (isSelected) Color.White else Color(0xFFD4D4D4),
-                                fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(vertical = 14.dp)
                             )
-                        }
-
-                        if (isSelected) {
-                            Row {
+                            if (isSelected) {
                                 IconButton(
                                     onClick = {
                                         sessionToRename = session
                                         renameInput = session.title
                                     },
-                                    modifier = Modifier.size(28.dp)
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .testTag("rename_session_" + session.id)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Edit,
-                                        contentDescription = "Ubah Nama",
-                                        tint = Color(0xFFAAAAAA),
-                                        modifier = Modifier.size(16.dp)
+                                        contentDescription = "Ubah nama chat",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                                 IconButton(
                                     onClick = { onDeleteSession(session.id) },
-                                    modifier = Modifier.size(28.dp)
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .testTag("delete_session_" + session.id)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.DeleteOutline,
-                                        contentDescription = "Hapus Chat",
-                                        tint = Color(0xFFAAAAAA),
-                                        modifier = Modifier.size(16.dp)
+                                        contentDescription = "Hapus chat",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }
@@ -244,73 +243,48 @@ fun ChatDrawerContent(
             }
         }
 
-        HorizontalDivider(
-            color = Color(0xFF2C2C2C),
-            modifier = Modifier.padding(vertical = 12.dp)
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        DrawerFooterRow(
+            icon = { Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(20.dp)) },
+            title = "Pengaturan API",
+            subtitle = apiConfig?.let { it.providerName + " • " + it.model } ?: "Belum dikonfigurasi",
+            testTag = "drawer_open_config",
+            onClick = onOpenConfig
         )
 
-        // Footer: API Config & Clear
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // API Config Tile
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { onOpenConfig() }
-                    .padding(horizontal = 10.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+        DrawerFooterRow(
+            icon = {
                 Icon(
-                    imageVector = Icons.Default.Settings,
+                    Icons.Default.Share,
                     contentDescription = null,
-                    tint = Color(0xFFB0B0B0),
                     modifier = Modifier.size(20.dp)
                 )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = "Pengaturan Base URL & API",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.White
-                    )
-                    Text(
-                        text = apiConfig?.let { "${it.providerName} • ${it.model}" } ?: "Belum dikonfigurasi",
-                        fontSize = 11.sp,
-                        color = Color(0xFF888888),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
+            },
+            title = "Ekspor artefak",
+            subtitle = "Simpan percakapan ini sebagai berkas",
+            testTag = "drawer_open_export",
+            onClick = onOpenExport
+        )
 
-            if (sessions.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { showClearAllConfirm = true }
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+        if (sessions.isNotEmpty()) {
+            DrawerFooterRow(
+                icon = {
                     Icon(
-                        imageVector = Icons.Default.DeleteOutline,
+                        Icons.Default.DeleteOutline,
                         contentDescription = null,
-                        tint = Color(0xFFEF4444),
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "Hapus Semua Percakapan",
-                        fontSize = 13.sp,
-                        color = Color(0xFFEF4444)
-                    )
-                }
-            }
+                },
+                title = "Hapus semua",
+                subtitle = null,
+                testTag = "drawer_clear_all",
+                tint = MaterialTheme.colorScheme.error,
+                onClick = { showClearAllConfirm = true }
+            )
         }
     }
 
-    // Rename Session Dialog
     if (sessionToRename != null) {
         AlertDialog(
             onDismissRequest = { sessionToRename = null },
@@ -345,7 +319,6 @@ fun ChatDrawerContent(
         )
     }
 
-    // Clear All Confirmation Dialog
     if (showClearAllConfirm) {
         AlertDialog(
             onDismissRequest = { showClearAllConfirm = false },
@@ -358,7 +331,7 @@ fun ChatDrawerContent(
                         showClearAllConfirm = false
                     }
                 ) {
-                    Text("Hapus", color = StatusError)
+                    Text("Hapus", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
@@ -368,4 +341,87 @@ fun ChatDrawerContent(
             }
         )
     }
+}
+
+@Composable
+private fun DrawerFooterRow(
+    icon: @Composable () -> Unit,
+    title: String,
+    subtitle: String?,
+    testTag: String,
+    onClick: () -> Unit,
+    tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 12.dp)
+            .testTag(testTag),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.material3.LocalContentColor provides tint
+            ) { icon() }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = tint
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+/** Mengelompokkan chat menjadi Hari ini / Kemarin / Sebelumnya (memakai Calendar, minSdk 24). */
+private fun groupSessions(
+    sessions: List<ChatSessionEntity>
+): List<Pair<String, List<ChatSessionEntity>>> {
+    val now = Calendar.getInstance()
+    val startOfToday = startOfDay(now)
+    val startOfYesterday = startOfToday - 24L * 60 * 60 * 1000
+
+    val today = mutableListOf<ChatSessionEntity>()
+    val yesterday = mutableListOf<ChatSessionEntity>()
+    val earlier = mutableListOf<ChatSessionEntity>()
+    sessions.forEach { session ->
+        when {
+            session.updatedAt >= startOfToday -> today.add(session)
+            session.updatedAt >= startOfYesterday -> yesterday.add(session)
+            else -> earlier.add(session)
+        }
+    }
+    val result = mutableListOf<Pair<String, List<ChatSessionEntity>>>()
+    if (today.isNotEmpty()) result.add("Hari ini" to today)
+    if (yesterday.isNotEmpty()) result.add("Kemarin" to yesterday)
+    if (earlier.isNotEmpty()) result.add("Sebelumnya" to earlier)
+    return result
+}
+
+private fun startOfDay(calendar: Calendar): Long {
+    val copy = Calendar.getInstance()
+    copy.timeInMillis = calendar.timeInMillis
+    copy.set(Calendar.HOUR_OF_DAY, 0)
+    copy.set(Calendar.MINUTE, 0)
+    copy.set(Calendar.SECOND, 0)
+    copy.set(Calendar.MILLISECOND, 0)
+    return copy.timeInMillis
 }

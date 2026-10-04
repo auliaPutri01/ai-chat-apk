@@ -38,8 +38,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.Attachment
 import com.example.data.model.AttachmentKind
-import com.example.ui.theme.GptEmerald
-import com.example.ui.theme.StatusWarning
 import java.io.File
 
 /** Ikon kecil sesuai jenis lampiran. */
@@ -96,7 +94,7 @@ fun PendingAttachmentRow(
                         Icon(
                             imageVector = attachmentIcon(attachment.kind),
                             contentDescription = null,
-                            tint = GptEmerald,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -111,7 +109,7 @@ fun PendingAttachmentRow(
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onBackground
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             text = Attachment.formatSize(attachment.sizeBytes) +
@@ -177,14 +175,14 @@ fun MessageAttachments(
                     modifier = Modifier
                         .padding(bottom = 4.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.surface)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(horizontal = 8.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = attachmentIcon(attachment.kind),
                         contentDescription = null,
-                        tint = GptEmerald,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(5.dp))
@@ -193,7 +191,7 @@ fun MessageAttachments(
                         fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onBackground
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -216,7 +214,7 @@ fun ServedByChip(
         modifier = modifier
             .padding(top = 6.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(StatusWarning.copy(alpha = 0.14f))
+            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.14f))
             .padding(horizontal = 8.dp, vertical = 4.dp)
             .testTag("served_by_chip"),
         verticalAlignment = Alignment.CenterVertically
@@ -225,7 +223,7 @@ fun ServedByChip(
             text = "Dijawab oleh: $servedBy",
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onBackground
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

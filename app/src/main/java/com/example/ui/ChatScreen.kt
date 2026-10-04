@@ -1,8 +1,8 @@
 package com.example.ui
 
-import androidx.activity.compose.BackHandler
-import android.widget.Toast
 import android.content.Intent
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,29 +26,22 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.PinDrop
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,33 +50,35 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.attachment.AttachmentLimits
+import com.example.data.connector.SavedFolder
+import com.example.ui.components.AiLogo
 import com.example.ui.components.ApiConfigModal
 import com.example.ui.components.AttachmentPickerSheet
 import com.example.ui.components.ChatDrawerContent
-import com.example.ui.components.ConnectorScreen
-import com.example.ui.components.GitHubFlowSheet
-import com.example.ui.components.TreeContentSheet
-import com.example.ui.components.WebLinkDialog
 import com.example.ui.components.ChatInputBar
 import com.example.ui.components.ChatMessageItem
 import com.example.ui.components.ChatTopBar
+import com.example.ui.components.ConnectorScreen
 import com.example.ui.components.ExportArtifactDialog
 import com.example.ui.components.GeminiFeaturesModal
+import com.example.ui.components.GeminiToolTab
+import com.example.ui.components.GitHubFlowSheet
 import com.example.ui.components.ModelSelectorDialog
-import com.example.data.connector.SavedFolder
-import com.example.ui.theme.GptEmerald
-import com.example.ui.theme.StatusWarning
+import com.example.ui.components.TreeContentSheet
+import com.example.ui.components.WebLinkDialog
 import kotlinx.coroutines.launch
 
+/**
+ * Layar utama: top bar minimal, daftar pesan (atau layar sambutan), dan satu pill input.
+ * Susunan serba simpel: sedikit elemen, satu warna aksen dari tema, dan banyak ruang kosong.
+ */
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel,
@@ -110,7 +105,6 @@ fun ChatScreen(
     var showAttachmentPicker by remember { mutableStateOf(false) }
     var showFolderChooser by remember { mutableStateOf(false) }
 
-    // Pemilih lampiran: galeri (multi), berkas (multi), dan ZIP (satu berkas).
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(
             AttachmentLimits.MAX_IMAGES_PER_MESSAGE
@@ -168,7 +162,7 @@ fun ChatScreen(
     var showConfigModal by remember { mutableStateOf(false) }
     var showModelSelector by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
-    var showGeminiStudio by remember { mutableStateOf(false) }
+    var geminiTab by remember { mutableStateOf<GeminiToolTab?>(null) }
 
     val hasApiKey = !apiConfig?.apiKey.isNullOrBlank()
     val activeModel = apiConfig?.model ?: "gemini-3.5-flash"
@@ -176,14 +170,26 @@ fun ChatScreen(
     val activeSession = sessions.find { it.id == currentSessionId }
     val activeTitle = activeSession?.title ?: "AI Hub Chat"
 
-    // Auto-scroll to bottom on new messages or generation updates
+    // Auto-scroll hanya bila pengguna sedang berada di dasar daftar.
+    val isAtBottom by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val lastVisible = info.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf true
+            lastVisible.index == info.totalItemsCount - 1 &&
+                lastVisible.offset + lastVisible.size <= info.viewportEndOffset + 8
+        }
+    }
+    var stickToBottom by remember { mutableStateOf(true) }
+    LaunchedEffect(isAtBottom) { stickToBottom = isAtBottom }
     LaunchedEffect(messages.size, messages.lastOrNull()?.content) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+        val last = messages.lastOrNull() ?: return@LaunchedEffect
+        // Pesan kita sendiri selalu diikuti (kita baru menekan kirim);
+        // balasan asisten hanya diikuti bila pengguna masih di dasar daftar.
+        if (stickToBottom || last.role == "user") {
+            listState.animateScrollToItem(messages.lastIndex)
         }
     }
 
-    // Close drawer on system back press if open
     BackHandler(enabled = drawerState.isOpen) {
         scope.launch { drawerState.close() }
     }
@@ -228,6 +234,10 @@ fun ChatScreen(
                 onOpenConfig = {
                     scope.launch { drawerState.close() }
                     showConfigModal = true
+                },
+                onOpenExport = {
+                    scope.launch { drawerState.close() }
+                    showExportDialog = true
                 }
             )
         }
@@ -238,12 +248,8 @@ fun ChatScreen(
                     activeModel = activeModel,
                     activeProfileName = activeProfileName,
                     hasApiKey = hasApiKey,
-                    hasMessages = messages.isNotEmpty(),
                     onOpenDrawer = { scope.launch { drawerState.open() } },
                     onOpenModelSelector = { showModelSelector = true },
-                    onOpenConfig = { showConfigModal = true },
-                    onOpenExport = { showExportDialog = true },
-                    onOpenGeminiStudio = { showGeminiStudio = true },
                     onNewChat = { viewModel.createNewSession() }
                 )
             },
@@ -257,15 +263,10 @@ fun ChatScreen(
                         inputText = ""
                     },
                     onStopGeneration = { viewModel.stopGeneration() },
-                    onOpenGeminiStudio = { showGeminiStudio = true },
-                    showSuggestions = messages.isEmpty(),
-                    onSelectSuggestion = { suggestion ->
-                        viewModel.sendMessage(suggestion, pendingAttachments)
-                        inputText = ""
-                    },
+                    onOpenAttachmentPicker = { showAttachmentPicker = true },
+                    onOpenVoiceTools = { geminiTab = GeminiToolTab.TRANSCRIBE },
                     attachments = pendingAttachments,
-                    onRemoveAttachment = { id -> viewModel.removePendingAttachment(id) },
-                    onOpenAttachmentPicker = { showAttachmentPicker = true }
+                    onRemoveAttachment = { id -> viewModel.removePendingAttachment(id) }
                 )
             },
             modifier = modifier.fillMaxSize()
@@ -276,184 +277,15 @@ fun ChatScreen(
                     .padding(innerPadding)
             ) {
                 if (messages.isEmpty()) {
-                    // Empty Conversation Screen with Quick Multimodal Capabilities
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        // AI Hub Center Badge
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(GptEmerald),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        Text(
-                            text = "Apa yang ingin Anda ciptakan hari ini?",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            textAlign = TextAlign.Center
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = "Hub AI Lengkap: Gemini 3.5 & Pro, Veo 3 Video, Image Edit, Maps Grounding, dan Transkrip Suara.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        // Quick Action Grid to launch studio tools
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Card(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { showGeminiStudio = true },
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Icon(imageVector = Icons.Default.Movie, contentDescription = null, tint = GptEmerald)
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text("Veo 3 Video", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                    Text("Generate teks / foto ke video", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-
-                            Card(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { showGeminiStudio = true },
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Icon(imageVector = Icons.Default.PinDrop, contentDescription = null, tint = GptEmerald)
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text("Maps Grounding", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                    Text("Info tempat & rute akurat", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Card(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { showGeminiStudio = true },
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Icon(imageVector = Icons.Default.Edit, contentDescription = null, tint = GptEmerald)
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text("Image Studio", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                    Text("Buat & edit foto AI", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-
-                            Card(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { showGeminiStudio = true },
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Icon(imageVector = Icons.Default.Mic, contentDescription = null, tint = GptEmerald)
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text("Transkripsi Suara", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                    Text("Rekam mikrofon ke teks", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(18.dp))
-
-                        // Banner if API Key is not set yet
-                        if (!hasApiKey) {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { showConfigModal = true }
-                                    .testTag("setup_api_banner_card"),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                                ),
-                                shape = RoundedCornerShape(16.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(StatusWarning.copy(alpha = 0.2f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Key,
-                                            contentDescription = null,
-                                            tint = StatusWarning,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "Atur Base URL & API Key",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp,
-                                            color = MaterialTheme.colorScheme.onBackground
-                                        )
-                                        Text(
-                                            text = "Tempel API Key Anda untuk mulai menggunakan Gemini, Veo, atau OpenAI.",
-                                            fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.Tune,
-                                        contentDescription = null,
-                                        tint = GptEmerald,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    WelcomeScreen(
+                        hasApiKey = hasApiKey,
+                        onSuggestionClick = { suggestion ->
+                            viewModel.sendMessage(suggestion, pendingAttachments)
+                            inputText = ""
+                        },
+                        onOpenConfig = { showConfigModal = true }
+                    )
                 } else {
-                    // Chat Messages Stream
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
@@ -469,12 +301,22 @@ fun ChatScreen(
                             )
                         }
                     }
+
+                    if (!isAtBottom) {
+                        ScrollToBottomButton(
+                            onClick = {
+                                scope.launch { listState.animateScrollToItem(messages.lastIndex) }
+                            },
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(16.dp)
+                        )
+                    }
                 }
             }
         }
     }
 
-    // Modal Sheet for Base URL & API Key Config
     if (showConfigModal) {
         ApiConfigModal(
             currentConfig = apiConfig,
@@ -497,16 +339,15 @@ fun ChatScreen(
         )
     }
 
-    // Modal Dialog for Quick Model Switch
     if (showModelSelector) {
         ModelSelectorDialog(
             currentModel = activeModel,
             onModelSelected = { viewModel.changeModel(it) },
-            onDismiss = { showModelSelector = false }
+            onDismiss = { showModelSelector = false },
+            onOpenConfig = { showConfigModal = true }
         )
     }
 
-    // Modal Dialog for Exporting Artifacts
     if (showExportDialog) {
         ExportArtifactDialog(
             chatTitle = activeTitle,
@@ -516,15 +357,14 @@ fun ChatScreen(
         )
     }
 
-    // Modal Bottom Sheet for Gemini & Veo Multimodal Tools
-    if (showGeminiStudio) {
+    geminiTab?.let { tab ->
         GeminiFeaturesModal(
             viewModel = viewModel,
-            onDismiss = { showGeminiStudio = false }
+            onDismiss = { geminiTab = null },
+            initialTab = tab
         )
     }
 
-    // Bottom sheet pemilih jenis lampiran (Gambar / File / ZIP)
     if (showAttachmentPicker) {
         AttachmentPickerSheet(
             onPickImages = {
@@ -558,6 +398,18 @@ fun ChatScreen(
                 showAttachmentPicker = false
                 viewModel.openWebDialog()
             },
+            onOpenImageStudio = {
+                showAttachmentPicker = false
+                geminiTab = GeminiToolTab.IMAGE_STUDIO
+            },
+            onOpenVeoVideo = {
+                showAttachmentPicker = false
+                geminiTab = GeminiToolTab.VEO_VIDEO
+            },
+            onOpenTranscribe = {
+                showAttachmentPicker = false
+                geminiTab = GeminiToolTab.TRANSCRIBE
+            },
             onDismiss = { showAttachmentPicker = false }
         )
     }
@@ -572,7 +424,6 @@ fun ChatScreen(
         )
     }
 
-    // Alur GitHub: repo -> branch -> (pilih berkas | unduh ZIP)
     if (gitHubFlow !is GitHubFlowState.Hidden) {
         GitHubFlowSheet(
             state = gitHubFlow,
@@ -594,7 +445,6 @@ fun ChatScreen(
         )
     }
 
-    // Dialog tautan web: pratinjau lalu lampirkan
     webDialog?.let { dialog ->
         WebLinkDialog(
             state = dialog,
@@ -605,7 +455,6 @@ fun ChatScreen(
         )
     }
 
-    // Pemilih folder tersimpan
     if (showFolderChooser) {
         SavedFolderChooser(
             folders = connectorState.folders,
@@ -618,6 +467,112 @@ fun ChatScreen(
                 folderPickerLauncher.launch(null)
             },
             onDismiss = { showFolderChooser = false }
+        )
+    }
+}
+
+/**
+ * Layar sambutan saat belum ada pesan: logo kecil, sapaan besar rata kiri,
+ * tiga chip saran netral, dan satu banner kecil bila API belum diatur.
+ */
+@Composable
+private fun WelcomeScreen(
+    hasApiKey: Boolean,
+    onSuggestionClick: (String) -> Unit,
+    onOpenConfig: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val suggestions = listOf(
+        "Jelaskan konsep cara kerja model bahasa",
+        "Bantu tulis kode Kotlin untuk aplikasi Android",
+        "Ringkas teks panjang menjadi beberapa poin"
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp)
+            .testTag("welcome_screen"),
+        verticalArrangement = Arrangement.Center
+    ) {
+        AiLogo(size = 40.dp)
+        Spacer(modifier = Modifier.height(18.dp))
+        Text(
+            text = "Halo, apa yang bisa dibantu?",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+
+        suggestions.forEach { suggestion ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable { onSuggestionClick(suggestion) }
+                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                    .testTag("welcome_suggestion_chip"),
+            ) {
+                Text(
+                    text = suggestion,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+
+        if (!hasApiKey) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable { onOpenConfig() }
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .testTag("setup_api_banner_card"),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.error)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Atur API untuk mulai",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
+
+/** Tombol kecil untuk melompat kembali ke pesan terbaru. */
+@Composable
+private fun ScrollToBottomButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable { onClick() }
+            .testTag("scroll_to_bottom_button"),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.KeyboardArrowDown,
+            contentDescription = "Ke pesan terbaru",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

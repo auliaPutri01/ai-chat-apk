@@ -43,8 +43,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.ui.GitHubFlowState
-import com.example.ui.theme.GptEmerald
-import com.example.ui.theme.StatusWarning
 
 /**
  * Alur GitHub: daftar repo (dengan pencarian + input owner/repo) lalu pilih branch,
@@ -123,7 +121,7 @@ fun GitHubFlowSheet(
                         Text(
                             text = hint,
                             style = MaterialTheme.typography.labelSmall,
-                            color = StatusWarning
+                            color = MaterialTheme.colorScheme.error
                         )
                     }
                     state.error?.let { error ->
@@ -131,7 +129,7 @@ fun GitHubFlowSheet(
                         Text(
                             text = error,
                             style = MaterialTheme.typography.bodySmall,
-                            color = StatusWarning,
+                            color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.testTag("github_error")
                         )
                     }
@@ -168,7 +166,7 @@ fun GitHubFlowSheet(
                                 Icon(
                                     imageVector = if (repo.isPrivate) Icons.Default.Cloud else Icons.Default.Public,
                                     contentDescription = null,
-                                    tint = GptEmerald
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
@@ -220,7 +218,7 @@ fun GitHubFlowSheet(
                     }
                     state.error?.let { error ->
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(error, style = MaterialTheme.typography.bodySmall, color = StatusWarning)
+                        Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     LazyColumn(
@@ -242,7 +240,7 @@ fun GitHubFlowSheet(
                                 Icon(
                                     imageVector = Icons.Default.Description,
                                     contentDescription = null,
-                                    tint = if (isDefault) GptEmerald else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                                    tint = if (isDefault) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(

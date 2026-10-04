@@ -26,7 +26,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.attachment.AttachmentLimits
 import com.example.ui.WebDialogState
-import com.example.ui.theme.StatusWarning
 
 /**
  * Dialog tautan web: masukkan URL, lihat pratinjau (judul + potongan teks),
@@ -73,7 +72,7 @@ fun WebLinkDialog(
                     Text(
                         text = error,
                         style = MaterialTheme.typography.bodySmall,
-                        color = StatusWarning,
+                        color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.testTag("web_error")
                     )
                 }

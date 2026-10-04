@@ -104,60 +104,7 @@ class GeminiDirectClient(
     }
 
     /**
-     * 2. Maps Grounding with gemini-3.5-flash
-     */
-    suspend fun generateWithMapsGrounding(
-        prompt: String,
-        customApiKey: String? = null
-    ): Result<String> = withContext(Dispatchers.IO) {
-        val apiKey = getEffectiveKey(customApiKey)
-        if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
-            return@withContext Result.failure(Exception("Gemini API Key belum diisi."))
-        }
-
-        try {
-            val url = "$baseUrl/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
-            val json = JSONObject().apply {
-                put("contents", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("parts", JSONArray().apply {
-                            put(JSONObject().apply { put("text", prompt) })
-                        })
-                    })
-                })
-                // Enable Google Maps tool
-                put("tools", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("googleMaps", JSONObject())
-                    })
-                })
-            }
-
-            val request = Request.Builder()
-                .url(url)
-                .post(json.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
-                .build()
-
-            okHttpClient.newCall(request).execute().use { response ->
-                val responseBody = response.body?.string().orEmpty()
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(parseError(responseBody, response.code))
-                }
-                val jsonResp = JSONObject(responseBody)
-                val candidates = jsonResp.optJSONArray("candidates")
-                val first = candidates?.optJSONObject(0)
-                val content = first?.optJSONObject("content")
-                val parts = content?.optJSONArray("parts")
-                val text = parts?.optJSONObject(0)?.optString("text").orEmpty()
-                Result.success(text.ifEmpty { "Informasi lokasi/peta berhasil diverifikasi." })
-            }
-        } catch (e: Exception) {
-            Result.failure(Exception("Gagal Maps Grounding: ${e.localizedMessage ?: e.message}"))
-        }
-    }
-
-    /**
-     * 3. Audio Transcription with gemini-3.5-transcribe
+     * 2. Audio Transcription with gemini-3.5-transcribe
      */
     suspend fun transcribeAudio(
         audioFile: File,
@@ -215,7 +162,7 @@ class GeminiDirectClient(
     }
 
     /**
-     * 4. Create & Edit Images using gemini-3.1-flash-image-preview
+     * 3. Create & Edit Images using gemini-3.1-flash-image-preview
      */
     suspend fun generateOrEditImage(
         prompt: String,
@@ -303,7 +250,7 @@ class GeminiDirectClient(
     }
 
     /**
-     * 5. Generate video from text or animate image using veo-3.1-fast-generate-preview
+     * 4. Generate video from text or animate image using veo-3.1-fast-generate-preview
      * Aspect ratio: 16:9 or 9:16
      */
     suspend fun generateVideo(

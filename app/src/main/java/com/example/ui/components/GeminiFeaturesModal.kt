@@ -39,7 +39,6 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.PinDrop
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
@@ -73,14 +72,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.ui.ChatViewModel
-import com.example.ui.theme.GptEmerald
-import com.example.ui.theme.StatusError
 import kotlinx.coroutines.launch
 import java.io.File
 
 enum class GeminiToolTab {
     CHAT_ROLES,
-    MAPS_GROUNDING,
     TRANSCRIBE,
     IMAGE_STUDIO,
     VEO_VIDEO
@@ -90,13 +86,15 @@ enum class GeminiToolTab {
 @Composable
 fun GeminiFeaturesModal(
     viewModel: ChatViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** Tab yang langsung terbuka (dipakai sheet "+" untuk Image Studio / Veo / Transkrip). */
+    initialTab: GeminiToolTab = GeminiToolTab.CHAT_ROLES
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    var currentTab by remember { mutableStateOf(GeminiToolTab.CHAT_ROLES) }
+    var currentTab by remember(initialTab) { mutableStateOf(initialTab) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -121,13 +119,13 @@ fun GeminiFeaturesModal(
                         modifier = Modifier
                             .size(32.dp)
                             .clip(CircleShape)
-                            .background(GptEmerald),
+                            .background(MaterialTheme.colorScheme.primary),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -140,7 +138,7 @@ fun GeminiFeaturesModal(
                             color = MaterialTheme.colorScheme.onBackground
                         )
                         Text(
-                            text = "Multi-turn, Maps, Transcribe, Image, & Veo Video",
+                            text = "Multi-turn, Transkrip, Image, & Veo Video",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -174,11 +172,6 @@ fun GeminiFeaturesModal(
                     onClick = { currentTab = GeminiToolTab.CHAT_ROLES }
                 )
                 TabChip(
-                    title = "📍 Maps Grounding",
-                    selected = currentTab == GeminiToolTab.MAPS_GROUNDING,
-                    onClick = { currentTab = GeminiToolTab.MAPS_GROUNDING }
-                )
-                TabChip(
                     title = "🎙️ Transkrip Audio",
                     selected = currentTab == GeminiToolTab.TRANSCRIBE,
                     onClick = { currentTab = GeminiToolTab.TRANSCRIBE }
@@ -205,7 +198,6 @@ fun GeminiFeaturesModal(
             ) {
                 when (currentTab) {
                     GeminiToolTab.CHAT_ROLES -> GeminiChatRoleTab(viewModel, onDismiss)
-                    GeminiToolTab.MAPS_GROUNDING -> GeminiMapsTab(viewModel, onDismiss)
                     GeminiToolTab.TRANSCRIBE -> GeminiTranscribeTab(viewModel, onDismiss)
                     GeminiToolTab.IMAGE_STUDIO -> GeminiImageStudioTab(viewModel, onDismiss)
                     GeminiToolTab.VEO_VIDEO -> GeminiVeoVideoTab(viewModel, onDismiss)
@@ -225,12 +217,12 @@ private fun TabChip(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
             .background(
-                if (selected) GptEmerald.copy(alpha = 0.2f)
+                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                 else MaterialTheme.colorScheme.surfaceVariant
             )
             .border(
                 1.dp,
-                if (selected) GptEmerald else Color.Transparent,
+                if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
                 RoundedCornerShape(12.dp)
             )
             .clickable { onClick() }
@@ -240,7 +232,7 @@ private fun TabChip(
             text = title,
             fontSize = 13.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected) GptEmerald else MaterialTheme.colorScheme.onBackground
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
         )
     }
 }
@@ -280,12 +272,12 @@ private fun GeminiChatRoleTab(
                     .padding(vertical = 4.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(
-                        if (isSelected) GptEmerald.copy(alpha = 0.15f)
+                        if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                         else MaterialTheme.colorScheme.surfaceVariant
                     )
                     .border(
                         1.dp,
-                        if (isSelected) GptEmerald else Color.Transparent,
+                        if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
                         RoundedCornerShape(10.dp)
                     )
                     .clickable { selectedModel = m }
@@ -300,12 +292,12 @@ private fun GeminiChatRoleTab(
                             text = m,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
-                            color = if (isSelected) GptEmerald else MaterialTheme.colorScheme.onBackground
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
                         )
                         Text(
                             text = label,
                             fontSize = 12.sp,
-                            color = GptEmerald,
+                            color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -332,7 +324,7 @@ private fun GeminiChatRoleTab(
             maxLines = 3,
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = GptEmerald,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = MaterialTheme.colorScheme.outline
             )
         )
@@ -345,7 +337,7 @@ private fun GeminiChatRoleTab(
                 onDismiss()
             },
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = GptEmerald)
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
         ) {
             Text("Terapkan ke Percakapan Ini", fontWeight = FontWeight.Bold)
         }
@@ -353,66 +345,7 @@ private fun GeminiChatRoleTab(
 }
 
 // -------------------------------------------------------------
-// 2. GOOGLE MAPS GROUNDING TAB
-// -------------------------------------------------------------
-@Composable
-private fun GeminiMapsTab(
-    viewModel: ChatViewModel,
-    onDismiss: () -> Unit
-) {
-    var query by remember { mutableStateOf("Rekomendasi kafe terbaik di Jakarta Selatan yang buka malam ini") }
-    var isLoading by remember { mutableStateOf(false) }
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "Google Maps Grounding (gemini-3.5-flash)",
-            fontWeight = FontWeight.Bold,
-            fontSize = 15.sp,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Text(
-            text = "Dapatkan informasi tempat, rute, rating, dan alamat paling mutakhir langsung dari Google Maps.",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            label = { Text("Pertanyaan Lokasi / Peta") },
-            maxLines = 3,
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = GptEmerald,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline
-            )
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(
-            onClick = {
-                if (query.isNotBlank()) {
-                    isLoading = true
-                    viewModel.askWithMapsGrounding(query)
-                    onDismiss()
-                }
-            },
-            enabled = !isLoading && query.isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = GptEmerald)
-        ) {
-            Icon(imageVector = Icons.Default.PinDrop, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Tanyakan dengan Maps Grounding", fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-// -------------------------------------------------------------
-// 3. AUDIO TRANSCRIPTION (gemini-3.5-transcribe)
+// 2. AUDIO TRANSCRIPTION (gemini-3.5-transcribe)
 // -------------------------------------------------------------
 @Composable
 private fun GeminiTranscribeTab(
@@ -472,7 +405,7 @@ private fun GeminiTranscribeTab(
             modifier = Modifier
                 .size(72.dp)
                 .clip(CircleShape)
-                .background(if (isRecording) StatusError else GptEmerald)
+                .background(if (isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
                 .clickable {
                     if (!hasAudioPermission) {
                         permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -528,13 +461,19 @@ private fun GeminiTranscribeTab(
                 },
             contentAlignment = Alignment.Center
         ) {
+            // Warna ikon mengikuti warna latar tombol rekam (error saat merekam, primary saat diam).
+            val actionTint = if (isRecording) {
+                MaterialTheme.colorScheme.onError
+            } else {
+                MaterialTheme.colorScheme.onPrimary
+            }
             if (isTranscribing) {
-                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(32.dp))
+                CircularProgressIndicator(color = actionTint, modifier = Modifier.size(32.dp))
             } else {
                 Icon(
                     imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
                     contentDescription = if (isRecording) "Stop Rekam" else "Mulai Rekam",
-                    tint = Color.White,
+                    tint = actionTint,
                     modifier = Modifier.size(36.dp)
                 )
             }
@@ -550,13 +489,13 @@ private fun GeminiTranscribeTab(
             },
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
-            color = if (isRecording) StatusError else MaterialTheme.colorScheme.onBackground
+            color = if (isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground
         )
     }
 }
 
 // -------------------------------------------------------------
-// 4. IMAGE STUDIO (gemini-3.1-flash-image-preview)
+// 3. IMAGE STUDIO (gemini-3.1-flash-image-preview)
 // -------------------------------------------------------------
 @Composable
 private fun GeminiImageStudioTab(
@@ -659,7 +598,7 @@ private fun GeminiImageStudioTab(
             maxLines = 3,
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = GptEmerald,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = MaterialTheme.colorScheme.outline
             )
         )
@@ -694,7 +633,7 @@ private fun GeminiImageStudioTab(
             },
             enabled = !isLoading && prompt.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = GptEmerald)
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
         ) {
             Icon(imageVector = Icons.Default.Edit, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
@@ -704,7 +643,7 @@ private fun GeminiImageStudioTab(
 }
 
 // -------------------------------------------------------------
-// 5. VEO 3 VIDEO GENERATION (veo-3.1-fast-generate-preview)
+// 4. VEO 3 VIDEO GENERATION (veo-3.1-fast-generate-preview)
 // -------------------------------------------------------------
 @Composable
 private fun GeminiVeoVideoTab(
@@ -807,7 +746,7 @@ private fun GeminiVeoVideoTab(
             maxLines = 3,
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = GptEmerald,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = MaterialTheme.colorScheme.outline
             )
         )
@@ -845,7 +784,7 @@ private fun GeminiVeoVideoTab(
             },
             enabled = !isLoading && prompt.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = GptEmerald)
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
         ) {
             Icon(imageVector = Icons.Default.Movie, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))

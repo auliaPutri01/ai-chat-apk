@@ -576,11 +576,6 @@ class ChatRepository(
         )
     }
 
-    // Maps Grounding
-    suspend fun callMapsGrounding(prompt: String, apiKey: String?): Result<String> {
-        return geminiClient.generateWithMapsGrounding(prompt, apiKey)
-    }
-
     // Audio Transcription
     suspend fun transcribeAudio(audioFile: File, apiKey: String?): Result<String> {
         return geminiClient.transcribeAudio(audioFile, apiKey)

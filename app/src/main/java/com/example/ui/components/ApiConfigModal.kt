@@ -80,9 +80,6 @@ import com.example.data.remote.FallbackPolicy
 import com.example.data.security.ApiKeyStatus
 import com.example.ui.ModelListState
 import com.example.ui.TestConnectionState
-import com.example.ui.theme.GptEmerald
-import com.example.ui.theme.StatusError
-import com.example.ui.theme.StatusWarning
 
 /** Placeholder/contoh nama model custom. Hanya contoh, bukan nilai paksa. */
 const val EXAMPLE_CUSTOM_MODEL: String = "gpt-6-luna-free"
@@ -182,7 +179,7 @@ fun ApiConfigModal(
                     },
                     modifier = Modifier.testTag("confirm_delete_profile_button")
                 ) {
-                    Text("Hapus", color = StatusError, fontWeight = FontWeight.SemiBold)
+                    Text("Hapus", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
                 }
             },
             dismissButton = {
@@ -252,7 +249,7 @@ fun ApiConfigModal(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(GptEmerald.copy(alpha = 0.15f))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                         .clickable {
                             onResetModelList()
                             onResetTestStatus()
@@ -273,13 +270,13 @@ fun ApiConfigModal(
                         Icon(
                             imageVector = Icons.Default.Add,
                             contentDescription = null,
-                            tint = GptEmerald,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "Profil Baru",
-                            color = GptEmerald,
+                            color = MaterialTheme.colorScheme.primary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -307,12 +304,12 @@ fun ApiConfigModal(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(
-                                    if (isActive) GptEmerald.copy(alpha = 0.2f)
+                                    if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                                     else MaterialTheme.colorScheme.surfaceVariant
                                 )
                                 .border(
                                     width = 1.dp,
-                                    color = if (isActive) GptEmerald else Color.Transparent,
+                                    color = if (isActive) MaterialTheme.colorScheme.primary else Color.Transparent,
                                     shape = RoundedCornerShape(12.dp)
                                 )
                                 .clickable {
@@ -331,7 +328,7 @@ fun ApiConfigModal(
                                         modifier = Modifier
                                             .size(8.dp)
                                             .clip(CircleShape)
-                                            .background(GptEmerald)
+                                            .background(MaterialTheme.colorScheme.primary)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                 }
@@ -339,7 +336,7 @@ fun ApiConfigModal(
                                     text = profile.providerName.ifBlank { "Profil" },
                                     fontSize = 13.sp,
                                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isActive) GptEmerald else MaterialTheme.colorScheme.onBackground,
+                                    color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
                                     maxLines = 1
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -381,7 +378,7 @@ fun ApiConfigModal(
                     .fillMaxWidth()
                     .testTag("profile_name_input"),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = GptEmerald,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
                 )
             )
@@ -408,12 +405,12 @@ fun ApiConfigModal(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .background(
-                                if (isSelected) GptEmerald.copy(alpha = 0.2f)
+                                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                                 else MaterialTheme.colorScheme.surfaceVariant
                             )
                             .border(
                                 width = 1.dp,
-                                color = if (isSelected) GptEmerald else Color.Transparent,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
                                 shape = RoundedCornerShape(12.dp)
                             )
                             .clickable {
@@ -433,7 +430,7 @@ fun ApiConfigModal(
                                 text = preset.name,
                                 fontSize = 13.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) GptEmerald else MaterialTheme.colorScheme.onBackground
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
                             )
                         }
                     }
@@ -458,7 +455,7 @@ fun ApiConfigModal(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(GptEmerald.copy(alpha = 0.15f))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                         .clickable {
                             val pasted = readClipboard(context)
                             if (!pasted.isNullOrEmpty()) {
@@ -478,13 +475,13 @@ fun ApiConfigModal(
                         Icon(
                             imageVector = Icons.Default.ContentPaste,
                             contentDescription = "Tempel Base URL",
-                            tint = GptEmerald,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "Tempel URL",
-                            color = GptEmerald,
+                            color = MaterialTheme.colorScheme.primary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -501,7 +498,7 @@ fun ApiConfigModal(
                     .fillMaxWidth()
                     .testTag("base_url_input"),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = GptEmerald,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
                 )
             )
@@ -510,7 +507,7 @@ fun ApiConfigModal(
                 Text(
                     text = "Catatan: " + baseUrlHint,
                     fontSize = 11.sp,
-                    color = StatusWarning,
+                    color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.testTag("base_url_warning")
                 )
             }
@@ -541,7 +538,7 @@ fun ApiConfigModal(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(GptEmerald.copy(alpha = 0.15f))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                         .clickable {
                             val pasted = readClipboard(context)
                             if (!pasted.isNullOrEmpty()) {
@@ -559,13 +556,13 @@ fun ApiConfigModal(
                         Icon(
                             imageVector = Icons.Default.ContentPaste,
                             contentDescription = "Tempel API Key",
-                            tint = GptEmerald,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "Tempel Key",
-                            color = GptEmerald,
+                            color = MaterialTheme.colorScheme.primary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -595,7 +592,7 @@ fun ApiConfigModal(
                     .fillMaxWidth()
                     .testTag("api_key_input"),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = GptEmerald,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
                 )
             )
@@ -608,7 +605,7 @@ fun ApiConfigModal(
                         text = "Key tersimpan tidak bisa dibuka di perangkat ini. " +
                             "Masukkan ulang API Key lalu simpan.",
                         fontSize = 11.sp,
-                        color = StatusError,
+                        color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.testTag("api_key_status_warning")
                     )
                 }
@@ -618,7 +615,7 @@ fun ApiConfigModal(
                         text = "Key profil ini masih tersimpan tanpa enkripsi. " +
                             "Tekan Simpan untuk mengenkripsinya.",
                         fontSize = 11.sp,
-                        color = StatusWarning,
+                        color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.testTag("api_key_status_warning")
                     )
                 }
@@ -642,7 +639,7 @@ fun ApiConfigModal(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(GptEmerald.copy(alpha = 0.15f))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                         .clickable {
                             if (modelListState is ModelListState.Loading) return@clickable
                             onFetchModels(baseUrl, apiKey)
@@ -654,21 +651,21 @@ fun ApiConfigModal(
                         if (modelListState is ModelListState.Loading) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(14.dp),
-                                color = GptEmerald,
+                                color = MaterialTheme.colorScheme.primary,
                                 strokeWidth = 2.dp
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = null,
-                                tint = GptEmerald,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(14.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "Ambil daftar model",
-                            color = GptEmerald,
+                            color = MaterialTheme.colorScheme.primary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -686,7 +683,7 @@ fun ApiConfigModal(
                     .fillMaxWidth()
                     .testTag("model_name_input"),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = GptEmerald,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
                 )
             )
@@ -709,7 +706,7 @@ fun ApiConfigModal(
                             onClick = onResetModelList,
                             modifier = Modifier.testTag("clear_model_list_button")
                         ) {
-                            Text("Bersihkan", fontSize = 11.sp, color = GptEmerald)
+                            Text("Bersihkan", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
                         }
                     }
                     Row(
@@ -742,7 +739,7 @@ fun ApiConfigModal(
                         text = modelListState.message +
                             "\nIsi nama model secara manual bila perlu — tidak ada yang diblokir.",
                         fontSize = 11.sp,
-                        color = StatusWarning,
+                        color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.testTag("model_list_message")
                     )
                 }
@@ -872,7 +869,7 @@ fun ApiConfigModal(
                 color = if (fallbackValidation.valid) {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 } else {
-                    StatusError
+                    MaterialTheme.colorScheme.error
                 },
                 modifier = Modifier.testTag("fallback_help_text")
             )
@@ -896,7 +893,7 @@ fun ApiConfigModal(
                     .fillMaxWidth()
                     .testTag("system_prompt_input"),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = GptEmerald,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
                 )
             )
@@ -917,7 +914,7 @@ fun ApiConfigModal(
                     text = String.format(java.util.Locale.US, "%.2f", temperature),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = GptEmerald
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
             Slider(
@@ -926,8 +923,8 @@ fun ApiConfigModal(
                 valueRange = 0f..1.5f,
                 steps = 14,
                 colors = SliderDefaults.colors(
-                    thumbColor = GptEmerald,
-                    activeTrackColor = GptEmerald
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary
                 ),
                 modifier = Modifier.testTag("temperature_slider")
             )
@@ -950,7 +947,7 @@ fun ApiConfigModal(
                         ) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
-                                color = GptEmerald,
+                                color = MaterialTheme.colorScheme.primary,
                                 strokeWidth = 2.dp
                             )
                             Spacer(modifier = Modifier.width(12.dp))
@@ -967,7 +964,7 @@ fun ApiConfigModal(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0x2210A37F))
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.13f))
                     ) {
                         Row(
                             modifier = Modifier.padding(12.dp),
@@ -976,7 +973,7 @@ fun ApiConfigModal(
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = null,
-                                tint = GptEmerald,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
@@ -994,7 +991,7 @@ fun ApiConfigModal(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0x22EF4444))
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.13f))
                     ) {
                         Row(
                             modifier = Modifier.padding(12.dp),
@@ -1003,7 +1000,7 @@ fun ApiConfigModal(
                             Icon(
                                 imageVector = Icons.Default.Error,
                                 contentDescription = null,
-                                tint = StatusError,
+                                tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
@@ -1074,8 +1071,8 @@ fun ApiConfigModal(
                         .weight(1.2f)
                         .testTag("save_config_button"),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = GptEmerald,
-                        contentColor = Color.White
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
                     Text("Simpan & Terapkan", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
